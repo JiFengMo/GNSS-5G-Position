@@ -1,0 +1,43 @@
+# Unified project build outputs
+/build/
+/build-*/
+/out/
+/.cache/
+
+# C/C++ generated files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+*.pdb
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# Large RF/GNSS captures and generated MATLAB state
+*.bin
+*.c16
+*.mat
+*.wks
+NR_TOA_IQ_DUMP_DIR/
+/5G/txsig0.m
+
+# Keep small metadata next to captures
+!*.meta.txt
+
+# Vivado generated state
+.Xil/
+*.jou
+*.wdb
+*.wcfg
+
+# Editors and scripting caches
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+
