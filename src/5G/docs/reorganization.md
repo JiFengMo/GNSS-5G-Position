@@ -21,4 +21,6 @@
 
 随后使用 Windows/MinGW 与 Ninja 完成 CMake 构建，同时启用 GNSS 和融合用于检查迁移完整性，7 项 CTest 全部通过（含融合 WLS）。由于本地旧版编译器对中文路径支持有限，构建使用源码内容相同的 ASCII 路径副本；没有修改算法以适配测试。
 
-CI 配置覆盖 Linux 离线、UHD 构建和预留模块。本地尚未验证 Linux/UHD 完整构建及射频实测；下一步应在原 USRP 环境以同一已验证配置复测连续 SSB 锁定、PBCH 和延迟输出。
+GitHub 的 [Linux CI 检查](https://github.com/JiFengMo/GNSS-5G-Position/actions/runs/39401675854) 已在代码提交 `f9c0fd1` 上全部通过：`offline`、`radio`（包含 UHD 在线接收机和锚点编译）、`all-offline` 三组均完成构建、CTest 和主配置检查。
+
+以上仍不代表射频实测；下一步应在原 USRP 环境以同一已验证配置复测连续 SSB 锁定、PBCH 和延迟输出。
