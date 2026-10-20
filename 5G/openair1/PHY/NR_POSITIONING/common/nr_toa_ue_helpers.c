@@ -2,8 +2,23 @@
 #include "openair1/PHY/NR_POSITIONING/nr_toa_ue.h"
 #include "openair1/PHY/NR_POSITIONING/nr_pos_api.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
+
+static double nr_toa_effective_ssb_freq_offset_hz(const nr_toa_ue_t *ue)
+{
+  if (!ue) {
+    return 0.0;
+  }
+  if (ue->app_cfg.ssb_offset_subcarriers != INT32_MIN) {
+    const uint32_t scs_khz = (ue->app_cfg.ssb_scs_khz == 15U || ue->app_cfg.ssb_scs_khz == 30U)
+        ? ue->app_cfg.ssb_scs_khz
+        : nr_v0_get_ssb_scs_khz();
+    return (double)ue->app_cfg.ssb_offset_subcarriers * (double)scs_khz * 1000.0;
+  }
+  return ue->app_cfg.ssb_freq_offset_hz;
+}
 
 static void nr_toa_note_rx_block(nr_toa_ue_t *ue, const nr_iq_block_t *blk,
                                  const char *tag)
@@ -65,8 +80,11 @@ int nr_toa_read_two_frames(nr_toa_ue_t *ue, nr_iq_ring_t *ring)
   /* Keep IQ processing in sync with the true RF sample rate. */
   blk->fs_hz = ue->rf_cfg.sample_rate;
   blk->rx_freq_hz = ue->current_rx_freq_hz;
+  blk->ssb_freq_offset_hz = nr_toa_effective_ssb_freq_offset_hz(ue);
+  blk->pbch_lmax = (uint8_t)ue->app_cfg.pbch_lmax;
   blk->rx_gscn = ue->current_rx_gscn;
   blk->target_pci = ue->current_target_pci;
+  blk->target_ssb_index = ue->app_cfg.target_ssb_index;
   blk->scan_target_idx = ue->current_scan_target_idx;
 
   if (nr_toa_radio_read(ue->dev, blk) != 0) {
@@ -113,8 +131,11 @@ int nr_toa_read_one_slot(nr_toa_ue_t *ue, nr_iq_ring_t *ring)
   /* Keep IQ processing in sync with the true RF sample rate. */
   blk->fs_hz = ue->rf_cfg.sample_rate;
   blk->rx_freq_hz = ue->current_rx_freq_hz;
+  blk->ssb_freq_offset_hz = nr_toa_effective_ssb_freq_offset_hz(ue);
+  blk->pbch_lmax = (uint8_t)ue->app_cfg.pbch_lmax;
   blk->rx_gscn = ue->current_rx_gscn;
   blk->target_pci = ue->current_target_pci;
+  blk->target_ssb_index = ue->app_cfg.target_ssb_index;
   blk->scan_target_idx = ue->current_scan_target_idx;
 
   if (nr_toa_radio_read(ue->dev, blk) != 0) {

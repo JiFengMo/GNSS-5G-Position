@@ -20,6 +20,25 @@ static const c16_t g_oai_phase_nr[NR_V0_SSS_PHASE_HYPOTHESES] = {
     {26509, 19260},  {23571, 22762},  {20173, 25821},  {16384, 28377},
 };
 
+static void nr_v0_apply_freq_offset_ref(float *ref_i, float *ref_q,
+                                        uint32_t len, double offset_hz,
+                                        double fs_hz)
+{
+  if (!ref_i || !ref_q || len == 0U || fs_hz <= 0.0 || offset_hz == 0.0) {
+    return;
+  }
+  const double w = 2.0 * M_PI * offset_hz / fs_hz;
+  for (uint32_t n = 0U; n < len; n++) {
+    const double ph = w * (double)n;
+    const double c = cos(ph);
+    const double s = sin(ph);
+    const double ri = ref_i[n];
+    const double rq = ref_q[n];
+    ref_i[n] = (float)(ri * c - rq * s);
+    ref_q[n] = (float)(ri * s + rq * c);
+  }
+}
+
 static double nr_v0_corr_power_td(const c16_t *x,
                                   uint32_t start,
                                   const float *ref_i,
@@ -168,14 +187,17 @@ static int nr_ssb_extract_window_shifted(const nr_iq_block_t *blk,
           sync->cum_tracking_shift_samp +
           (int64_t)delta_samp;
   if (start < 0) {
-    start = 0;
+    return -1;
   }
   if ((uint64_t)start >= blk->nsamps) {
-    start = 0;
+    return -1;
   }
   win->start_samp = (uint32_t)start;
   want = nr_v0_ssb_burst_len_fs(blk->fs_hz);
   rem = blk->nsamps - win->start_samp;
+  if (rem < want) {
+    return -1;
+  }
   win->len_samp = (rem > want) ? want : rem;
   return 0;
 }
@@ -209,6 +231,14 @@ static void nr_pbch_sync_apply_hyp(nr_sync_state_t *sync,
   sync->pbch_best_sss_delta_bias = hyp->sss_delta_bias;
   sync->pbch_best_timing_delta = (int16_t)hyp->timing_delta;
   sync->pbch_best_cfo_delta_hz = hyp->cfo_delta_hz;
+}
+
+static uint8_t nr_pbch_lmax_from_block(const nr_iq_block_t *blk)
+{
+  if (blk && (blk->pbch_lmax == 4U || blk->pbch_lmax == 8U || blk->pbch_lmax == 64U)) {
+    return blk->pbch_lmax;
+  }
+  return (blk && blk->rx_freq_hz > 3000.0e6) ? 8U : 4U;
 }
 
 static void nr_pbch_insert_hyp(nr_pbch_hyp_t *hyps, uint32_t max_hyps,
@@ -335,6 +365,10 @@ int nr_ssb_pss_search(const nr_iq_block_t *blk, nr_pss_hit_t *hits, int max_hits
       return -1;
     }
     nr_v0_pss_build_td_f_fs(nid2, fs_hz, pss_full_i[nid2], pss_full_q[nid2], ref_len + ref_cp_len);
+    nr_v0_apply_freq_offset_ref(pss_full_i[nid2], pss_full_q[nid2],
+                                ref_len + ref_cp_len,
+                                blk->ssb_freq_offset_hz,
+                                fs_hz);
     pss_i[nid2] = pss_full_i[nid2] + ref_cp_len;
     pss_q[nid2] = pss_full_q[nid2] + ref_cp_len;
   }
@@ -634,7 +668,9 @@ int nr_ssb_pbch_decode(const nr_iq_block_t *blk, nr_sync_state_t *sync)
   uint32_t timing_count = sizeof(timing_deltas) / sizeof(timing_deltas[0]);
   uint32_t cfo_count = sizeof(cfo_deltas_hz) / sizeof(cfo_deltas_hz[0]);
   uint8_t ssb_candidate_count = k_pbch_ssb_candidates;
-  const uint8_t n_hf_count = (blk && blk->rx_freq_hz > 3000.0e6) ? 1U : 2U;
+  uint8_t ssb_candidate_start = 0U;
+  uint8_t n_hf_count = 1U;
+  uint8_t pbch_lmax = 8U;
   uint32_t decode_hyp_count = 0U;
   uint32_t hyp_count = 0U;
   int32_t best_timing_delta = 0;
@@ -644,6 +680,15 @@ int nr_ssb_pbch_decode(const nr_iq_block_t *blk, nr_sync_state_t *sync)
   if (!blk || !sync) {
     return -1;
   }
+  pbch_lmax = nr_pbch_lmax_from_block(blk);
+  sync->pbch_lmax = pbch_lmax;
+  ssb_candidate_count = (pbch_lmax == 4U) ? 4U : k_pbch_ssb_candidates;
+  if (blk->target_ssb_index >= 0 && blk->target_ssb_index < (int32_t)ssb_candidate_count) {
+    ssb_candidate_start = (uint8_t)blk->target_ssb_index;
+    ssb_candidate_count = 1U;
+    sync->ssb_index = ssb_candidate_start;
+  }
+  n_hf_count = (pbch_lmax == 4U) ? 2U : 1U;
   float best_metric = -1.0f;
   float second_metric = -1.0f;
   float best_llr_metric = -1.0f;
@@ -663,7 +708,6 @@ int nr_ssb_pbch_decode(const nr_iq_block_t *blk, nr_sync_state_t *sync)
   if (sync->pci_hyp_count > 0U) {
     pci_hyp_count = (sync->pci_hyp_count < NR_MAX_PCI_HYPS) ? sync->pci_hyp_count : NR_MAX_PCI_HYPS;
   }
-  ssb_candidate_count = k_pbch_ssb_candidates;
   if (blk && blk->target_pci >= 0 && blk->target_pci < 1008) {
     pci_hyp_count = 1U;
   }
@@ -705,6 +749,7 @@ int nr_ssb_pbch_decode(const nr_iq_block_t *blk, nr_sync_state_t *sync)
         }
         nr_sync_state_t trial0 = *sync;
         trial0.pbch_dmrs_n_hf = n_hf;
+        trial0.pbch_lmax = pbch_lmax;
         if (nr_pbch_bch_decode(llr0, 864U, &trial0) == 0) {
           *sync = trial0;
           sync->pbch_ok = 1;
@@ -724,14 +769,17 @@ int nr_ssb_pbch_decode(const nr_iq_block_t *blk, nr_sync_state_t *sync)
   }
 
   if ((pbch_dbg_cnt % 20U) == 0U) {
-    printf("pbch_grid: pci=%u target=%d pci_hyp=%u timing=%u cfo=%u ssb_candidates=%u n_hf=%u coarse_offset=%d cfo=%.2f pss=%.3f snr=%.2f\n",
+    printf("pbch_grid: pci=%u target=%d target_ssb=%d pci_hyp=%u timing=%u cfo=%u lmax=%u ssb_candidates=%u n_hf=%u ssb_off=%.1f coarse_offset=%d cfo=%.2f pss=%.3f snr=%.2f\n",
            (unsigned)sync->pci,
            blk ? blk->target_pci : -1,
+           blk ? blk->target_ssb_index : -1,
            (unsigned)pci_hyp_count,
            timing_count,
            cfo_count,
+           (unsigned)pbch_lmax,
            (unsigned)ssb_candidate_count,
            (unsigned)n_hf_count,
+           blk ? blk->ssb_freq_offset_hz : 0.0,
            sync->coarse_offset_samp,
            sync->cfo_hz,
            sync->pss_metric,
@@ -758,7 +806,8 @@ int nr_ssb_pbch_decode(const nr_iq_block_t *blk, nr_sync_state_t *sync)
         uint8_t best_ssb_for_pci = 0;
         uint8_t best_n_hf_for_pci = 0;
         float second_ssb_metric_for_pci = -1.0f;
-        for (uint8_t ssb_idx = 0U; ssb_idx < ssb_candidate_count; ssb_idx++) {
+        for (uint8_t s = 0U; s < ssb_candidate_count; s++) {
+          const uint8_t ssb_idx = (uint8_t)(ssb_candidate_start + s);
           for (uint8_t n_hf = 0U; n_hf < n_hf_count; n_hf++) {
             const float metric = nr_ssb_pbch_dmrs_corr_metric(&grids[grid_idx], pci, ssb_idx, n_hf);
             if (metric < 0.0f) {

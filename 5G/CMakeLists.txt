@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 
-include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(UHD REQUIRED uhd)
 
@@ -55,6 +55,10 @@ set(NR_POSITIONING_SOURCES
 )
 
 add_library(nr_positioning STATIC ${NR_POSITIONING_SOURCES})
+target_include_directories(nr_positioning PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/../openairinterface5g-develop
+)
 target_link_libraries(nr_positioning PUBLIC nr_radio m pthread)
 
 add_executable(nr-toa-uesoftmodem executables/nr-toa-uesoftmodem.c)

@@ -35,6 +35,9 @@ static nr_iq_block_t *nr_iq_block_create(uint32_t nsamps, uint8_t rx_ant)
   }
   blk->nsamps = nsamps;
   blk->rx_ant = rx_ant;
+  blk->rx_gscn = -1;
+  blk->target_pci = -1;
+  blk->target_ssb_index = -1;
   for (int a = 0; a < rx_ant; a++) {
     blk->rx[a] = (c16_t *)calloc(nsamps, sizeof(c16_t));
     if (!blk->rx[a]) {
@@ -140,8 +143,11 @@ nr_iq_block_t *nr_iq_ring_alloc_ex(nr_iq_ring_t *rb, uint32_t nsamps, uint8_t rx
       blk->abs_samp0 = 0;
       blk->fs_hz = 0.0;
       blk->rx_freq_hz = 0.0;
+      blk->ssb_freq_offset_hz = 0.0;
+      blk->pbch_lmax = 0U;
       blk->rx_gscn = -1;
       blk->target_pci = -1;
+      blk->target_ssb_index = -1;
       blk->scan_target_idx = 0;
       blk->overrun = 0;
       blk->refcnt = 1;

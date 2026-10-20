@@ -562,7 +562,7 @@ int nr_v0_ssb_build_burst_iq(int nid1, int nid2,
         const int k = (int)dmrs_rel[m] - 120;
         const int bin = (k >= 0) ? k : ((int)nfft + k);
         Xr[(uint32_t)bin] = dmrs_i[m];
-        Xi[(uint32_t)bin] = dmrs_q[m];
+        Xi[(uint32_t)bin] = -dmrs_q[m];
       }
     }
     for (uint32_t m = 0U; m < 432U; m++) {

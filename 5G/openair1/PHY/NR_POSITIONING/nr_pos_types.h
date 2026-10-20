@@ -74,8 +74,11 @@ typedef struct nr_iq_block {
   uint32_t nsamps;
   double fs_hz; /* Sampling rate (Hz), set by radio read path */
   double rx_freq_hz; /* RF center frequency associated with this IQ capture. */
+  double ssb_freq_offset_hz; /* SS/PBCH block center relative to rx_freq_hz. */
+  uint8_t pbch_lmax; /* NR PBCH Lmax hypothesis set: 4, 8, or 64; 0 = auto. */
   int32_t rx_gscn;   /* Sweep raster index/GSCN associated with this IQ capture. */
   int32_t target_pci; /* Target PCI snapshot associated with this IQ capture. */
+  int32_t target_ssb_index; /* Fixed SSB index for PBCH hypotheses, -1 = auto. */
   uint32_t scan_target_idx; /* Configured scan target index for this IQ capture. */
   uint8_t rx_ant;
   uint8_t overrun;
@@ -356,6 +359,7 @@ typedef struct {
   float pbch_metric;
   float pbch_metric_second;
   uint8_t pbch_fail_stage;
+  uint8_t pbch_lmax;
   uint8_t pbch_llr_valid;
   int16_t pbch_best_sss_delta_bias;
   int16_t pbch_best_timing_delta;
@@ -506,9 +510,13 @@ typedef struct {
   uint8_t strict_center_freq;
   uint8_t gain_sweep_enable;
   int32_t target_pci;
+  int32_t target_ssb_index;
   uint32_t scan_target_count;
   nr_scan_target_t scan_targets[NR_TOA_MAX_SCAN_TARGETS];
   uint32_t ssb_scs_khz;
+  double ssb_freq_offset_hz;
+  int32_t ssb_offset_subcarriers;
+  uint32_t pbch_lmax;
 
   /* SSB scheduler / RF stream shaping */
   uint32_t ssb_period_ms;

@@ -268,7 +268,6 @@ static int nr_pbch_payload_descramble(uint16_t pci, const uint8_t *scrambled32,
   uint8_t ref_il[NR_PBCH_A];
   uint8_t mask[NR_PBCH_A];
   uint8_t tmp32[NR_PBCH_A];
-  uint8_t tmp_orig[NR_PBCH_A];
   uint8_t c[29U * 4U];
   uint32_t j = 0U;
   uint32_t v = 0U;
@@ -279,8 +278,7 @@ static int nr_pbch_payload_descramble(uint16_t pci, const uint8_t *scrambled32,
   memcpy(tmp32, scrambled32, sizeof(tmp32));
   memset(ref_plain, 0, sizeof(ref_plain));
   nr_pbch_payload_interleave(ref_plain, ref_il, mask);
-  nr_pbch_payload_deinterleave(scrambled32, tmp_orig);
-  v = ((uint32_t)tmp_orig[25] << 1U) | (uint32_t)tmp_orig[26];
+  v = (uint32_t)(scrambled32[24] & 1U) | ((uint32_t)(scrambled32[6] & 1U) << 1U);
   nr_pbch_gen_prbs((uint32_t)pci, c, (v + 1U) * 29U);
   for (uint32_t i = 0; i < NR_PBCH_A; i++) {
     if (!mask[i]) {
@@ -1106,9 +1104,15 @@ static void nr_pbch_rate_match_decode(const float *in, float *out)
   }
 }
 
-static void nr_pbch_codeword_scramble(uint16_t pci, uint8_t ssb_idx, uint8_t *bits)
+static uint8_t nr_pbch_lmax_normalize(uint8_t lmax)
 {
-  const uint32_t nu = (uint32_t)(ssb_idx & 7U);
+  return (lmax == 4U || lmax == 8U || lmax == 64U) ? lmax : 8U;
+}
+
+static void nr_pbch_codeword_scramble(uint16_t pci, uint8_t ssb_idx, uint8_t lmax, uint8_t *bits)
+{
+  const uint8_t norm_lmax = nr_pbch_lmax_normalize(lmax);
+  const uint32_t nu = (uint32_t)((norm_lmax == 4U) ? (ssb_idx & 3U) : (ssb_idx & 7U));
   uint8_t *c = (uint8_t *)malloc(sizeof(*c) * (size_t)((nu + 1U) * NR_PBCH_E));
   if (!c || !bits) {
     free(c);
@@ -1121,9 +1125,10 @@ static void nr_pbch_codeword_scramble(uint16_t pci, uint8_t ssb_idx, uint8_t *bi
   free(c);
 }
 
-static void nr_pbch_codeword_descramble_llr(uint16_t pci, uint8_t ssb_idx, float *llr)
+static void nr_pbch_codeword_descramble_llr(uint16_t pci, uint8_t ssb_idx, uint8_t lmax, float *llr)
 {
-  const uint32_t nu = (uint32_t)(ssb_idx & 7U);
+  const uint8_t norm_lmax = nr_pbch_lmax_normalize(lmax);
+  const uint32_t nu = (uint32_t)((norm_lmax == 4U) ? (ssb_idx & 3U) : (ssb_idx & 7U));
   uint8_t *c = (uint8_t *)malloc(sizeof(*c) * (size_t)((nu + 1U) * NR_PBCH_E));
   if (!c || !llr) {
     free(c);
@@ -1229,7 +1234,7 @@ int nr_pbch_bch_encode(uint16_t pci, uint8_t ssb_idx, uint16_t sfn, uint8_t hrf,
   nr_polar_encode_n(u, NR_PBCH_N, d);
   nr_pbch_subblock_interleave(d, y);
   nr_pbch_rate_match_encode(y, coded_bits);
-  nr_pbch_codeword_scramble(pci, ssb_idx, coded_bits);
+  nr_pbch_codeword_scramble(pci, ssb_idx, 8U, coded_bits);
   return (int)NR_PBCH_E;
 }
 
@@ -1251,7 +1256,7 @@ int nr_pbch_bch_decode(const float *llr, uint32_t llr_len, nr_sync_state_t *sync
 
   memcpy(llr_scr, llr, sizeof(llr_scr));
 
-  nr_pbch_codeword_descramble_llr(sync->pci, sync->ssb_index, llr_scr);
+  nr_pbch_codeword_descramble_llr(sync->pci, sync->ssb_index, sync->pbch_lmax, llr_scr);
   nr_pbch_rate_match_decode(llr_scr, llr_rm);
   nr_pbch_subblock_deinterleave_llr(llr_rm, llr_sub);
 

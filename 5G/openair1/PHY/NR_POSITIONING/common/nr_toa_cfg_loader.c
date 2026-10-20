@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -150,7 +151,11 @@ int nr_toa_load_config(const char *path, nr_toa_app_cfg_t *cfg)
   cfg->strict_center_freq = 0;
   cfg->gain_sweep_enable = 1;
   cfg->target_pci = -1;
+  cfg->target_ssb_index = -1;
   cfg->ssb_scs_khz = 0U;
+  cfg->ssb_freq_offset_hz = 0.0;
+  cfg->ssb_offset_subcarriers = INT32_MIN;
+  cfg->pbch_lmax = 0U;
 
   FILE *fp = fopen(path, "r");
   if (!fp) {
@@ -257,12 +262,29 @@ int nr_toa_load_config(const char *path, nr_toa_app_cfg_t *cfg)
       if (nr_parse_i32(val, &v) == 0 && v >= -1 && v < 1008) {
         cfg->target_pci = v;
       }
+    } else if (nr_streq_icase(key, "target_ssb_index")) {
+      int32_t v = -1;
+      if (nr_parse_i32(val, &v) == 0 && v >= -1 && v < 64) {
+        cfg->target_ssb_index = v;
+      }
     } else if (nr_streq_icase(key, "scan_targets")) {
       nr_parse_scan_targets(val, cfg);
     } else if (nr_streq_icase(key, "ssb_scs_khz")) {
       uint32_t v = 0;
       if (nr_parse_u32(val, &v) == 0) {
         cfg->ssb_scs_khz = v;
+      }
+    } else if (nr_streq_icase(key, "ssb_freq_offset_hz")) {
+      cfg->ssb_freq_offset_hz = strtod(val, NULL);
+    } else if (nr_streq_icase(key, "ssb_offset_subcarriers")) {
+      int32_t v = 0;
+      if (nr_parse_i32(val, &v) == 0) {
+        cfg->ssb_offset_subcarriers = v;
+      }
+    } else if (nr_streq_icase(key, "pbch_lmax")) {
+      uint32_t v = 0;
+      if (nr_parse_u32(val, &v) == 0 && (v == 0U || v == 4U || v == 8U || v == 64U)) {
+        cfg->pbch_lmax = v;
       }
     } else if (nr_streq_icase(key, "ssb_period_ms")) {
       uint32_t v = 0;

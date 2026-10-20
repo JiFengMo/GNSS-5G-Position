@@ -1,5 +1,5 @@
 #include "openair1/PHY/NR_POSITIONING/nr_pos_api.h"
-#include "openairinterface5g/openair1/PHY/NR_UE_ESTIMATION/filt16a_32.h"
+#include "openair1/PHY/NR_UE_ESTIMATION/filt16a_32.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -44,9 +44,11 @@ static void nr_ssb_pbch_select_oai_filters(uint8_t v,
 static cf32_t nr_ssb_pbch_dmrs_ls(const cf32_t y, float xr, float xi)
 {
   const float den = xr * xr + xi * xi + 1.0e-6f;
+  /* nr_v0_pbch_dmrs_build returns the OAI RX reference, i.e. conj(tx_dmrs).
+   * Channel LS therefore multiplies the received pilot by this reference. */
   return (cf32_t){
-      .r = (y.r * xr + y.i * xi) / den,
-      .i = (y.i * xr - y.r * xi) / den,
+      .r = (y.r * xr - y.i * xi) / den,
+      .i = (y.r * xi + y.i * xr) / den,
   };
 }
 
@@ -121,18 +123,18 @@ static int nr_ssb_pbch_oai_channel_estimation(const nr_ssb_grid_t *grid,
       const cf32_t y1 = grid->re[sym][rb0 + v + 4U];
       const cf32_t y2 = grid->re[sym][rb0 + v + 8U];
       const cf32_t h0 = nr_ssb_pbch_dmrs_ls(y0, dmrs_i[pilot], dmrs_q[pilot]);
-      cr += (double)y0.r * (double)dmrs_i[pilot] + (double)y0.i * (double)dmrs_q[pilot];
-      ci += (double)y0.i * (double)dmrs_i[pilot] - (double)y0.r * (double)dmrs_q[pilot];
+      cr += (double)y0.r * (double)dmrs_i[pilot] - (double)y0.i * (double)dmrs_q[pilot];
+      ci += (double)y0.r * (double)dmrs_q[pilot] + (double)y0.i * (double)dmrs_i[pilot];
       px += (double)y0.r * (double)y0.r + (double)y0.i * (double)y0.i;
       pilot++;
       const cf32_t h1 = nr_ssb_pbch_dmrs_ls(y1, dmrs_i[pilot], dmrs_q[pilot]);
-      cr += (double)y1.r * (double)dmrs_i[pilot] + (double)y1.i * (double)dmrs_q[pilot];
-      ci += (double)y1.i * (double)dmrs_i[pilot] - (double)y1.r * (double)dmrs_q[pilot];
+      cr += (double)y1.r * (double)dmrs_i[pilot] - (double)y1.i * (double)dmrs_q[pilot];
+      ci += (double)y1.r * (double)dmrs_q[pilot] + (double)y1.i * (double)dmrs_i[pilot];
       px += (double)y1.r * (double)y1.r + (double)y1.i * (double)y1.i;
       pilot++;
       const cf32_t h2 = nr_ssb_pbch_dmrs_ls(y2, dmrs_i[pilot], dmrs_q[pilot]);
-      cr += (double)y2.r * (double)dmrs_i[pilot] + (double)y2.i * (double)dmrs_q[pilot];
-      ci += (double)y2.i * (double)dmrs_i[pilot] - (double)y2.r * (double)dmrs_q[pilot];
+      cr += (double)y2.r * (double)dmrs_i[pilot] - (double)y2.i * (double)dmrs_q[pilot];
+      ci += (double)y2.r * (double)dmrs_q[pilot] + (double)y2.i * (double)dmrs_i[pilot];
       px += (double)y2.r * (double)y2.r + (double)y2.i * (double)y2.i;
       pilot++;
       nr_ssb_pbch_filter_accumulate(tls_h_full_pbch, tls_valid_pbch, sym, rb0, h0, fl);
@@ -146,18 +148,18 @@ static int nr_ssb_pbch_oai_channel_estimation(const nr_ssb_grid_t *grid,
         const cf32_t y1 = grid->re[sym][rb0 + v + 4U];
         const cf32_t y2 = grid->re[sym][rb0 + v + 8U];
         const cf32_t h0 = nr_ssb_pbch_dmrs_ls(y0, dmrs_i[pilot], dmrs_q[pilot]);
-        cr += (double)y0.r * (double)dmrs_i[pilot] + (double)y0.i * (double)dmrs_q[pilot];
-        ci += (double)y0.i * (double)dmrs_i[pilot] - (double)y0.r * (double)dmrs_q[pilot];
+        cr += (double)y0.r * (double)dmrs_i[pilot] - (double)y0.i * (double)dmrs_q[pilot];
+        ci += (double)y0.r * (double)dmrs_q[pilot] + (double)y0.i * (double)dmrs_i[pilot];
         px += (double)y0.r * (double)y0.r + (double)y0.i * (double)y0.i;
         pilot++;
         const cf32_t h1 = nr_ssb_pbch_dmrs_ls(y1, dmrs_i[pilot], dmrs_q[pilot]);
-        cr += (double)y1.r * (double)dmrs_i[pilot] + (double)y1.i * (double)dmrs_q[pilot];
-        ci += (double)y1.i * (double)dmrs_i[pilot] - (double)y1.r * (double)dmrs_q[pilot];
+        cr += (double)y1.r * (double)dmrs_i[pilot] - (double)y1.i * (double)dmrs_q[pilot];
+        ci += (double)y1.r * (double)dmrs_q[pilot] + (double)y1.i * (double)dmrs_i[pilot];
         px += (double)y1.r * (double)y1.r + (double)y1.i * (double)y1.i;
         pilot++;
         const cf32_t h2 = nr_ssb_pbch_dmrs_ls(y2, dmrs_i[pilot], dmrs_q[pilot]);
-        cr += (double)y2.r * (double)dmrs_i[pilot] + (double)y2.i * (double)dmrs_q[pilot];
-        ci += (double)y2.i * (double)dmrs_i[pilot] - (double)y2.r * (double)dmrs_q[pilot];
+        cr += (double)y2.r * (double)dmrs_i[pilot] - (double)y2.i * (double)dmrs_q[pilot];
+        ci += (double)y2.r * (double)dmrs_q[pilot] + (double)y2.i * (double)dmrs_i[pilot];
         px += (double)y2.r * (double)y2.r + (double)y2.i * (double)y2.i;
         pilot++;
         nr_ssb_pbch_filter_accumulate(tls_h_full_pbch, tls_valid_pbch, sym, rb0, h0, fl);
@@ -217,8 +219,8 @@ float nr_ssb_pbch_dmrs_corr_metric(const nr_ssb_grid_t *grid,
       const cf32_t y = grid->re[sym][rel];
       const float xr = dmrs_i[m];
       const float xi = dmrs_q[m];
-      sym_r += (double)y.r * (double)xr + (double)y.i * (double)xi;
-      sym_i += (double)y.i * (double)xr - (double)y.r * (double)xi;
+      sym_r += (double)y.r * (double)xr - (double)y.i * (double)xi;
+      sym_i += (double)y.r * (double)xi + (double)y.i * (double)xr;
       rx_pow += (double)y.r * (double)y.r + (double)y.i * (double)y.i;
       ref_pow += (double)xr * (double)xr + (double)xi * (double)xi;
     }
@@ -267,8 +269,8 @@ static float nr_ssb_pbch_noise_cpe(const nr_ssb_grid_t *grid,
     const cf32_t h = hf->h_full[nr_ssb_re_idx(sym, rel)];
     const float xr = dmrs_i[m];
     const float xi = dmrs_q[m];
-    const float pr = h.r * xr - h.i * xi;
-    const float pi = h.r * xi + h.i * xr;
+    const float pr = h.r * xr + h.i * xi;
+    const float pi = h.i * xr - h.r * xi;
     const float er = y.r - pr;
     const float ei = y.i - pi;
     err_pow += (double)er * (double)er + (double)ei * (double)ei;
@@ -335,8 +337,8 @@ static void nr_ssb_ls_from_ref(const nr_ssb_grid_t *grid,
   const uint32_t idx = nr_ssb_re_idx(sym, rel);
   const cf32_t y = grid->re[sym][rel];
   const float den = xr * xr + xi * xi + 1.0e-6f;
-  h_ls[idx].r = (y.r * xr + y.i * xi) / den;
-  h_ls[idx].i = (y.i * xr - y.r * xi) / den;
+  h_ls[idx].r = (y.r * xr - y.i * xi) / den;
+  h_ls[idx].i = (y.r * xi + y.i * xr) / den;
   valid[idx] = 1U;
 }
 

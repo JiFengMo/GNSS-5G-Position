@@ -3,6 +3,7 @@
 #include "openair1/PHY/NR_POSITIONING/nr_pos_api.h"
 
 #include <pthread.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -1056,7 +1057,13 @@ int main(int argc, char **argv)
     }
   }
 
-  printf("NR-TOA UE cfg: sdr=%s provider=%s clock=%s time=%s band=%d f=%0.f Fs=%0.f rx_gain=%0.1f tx_gain=%0.1f mode=%u meas_mode=%u full_band_sweep=%u strict_center_freq=%u gain_sweep=%u target_pci=%d ssb_scs=%ukHz anchor_db_path=%s n_anchors=%d\n",
+  char ssb_offset_sc_txt[32];
+  if (ue.app_cfg.ssb_offset_subcarriers == INT32_MIN) {
+    (void)snprintf(ssb_offset_sc_txt, sizeof(ssb_offset_sc_txt), "auto");
+  } else {
+    (void)snprintf(ssb_offset_sc_txt, sizeof(ssb_offset_sc_txt), "%d", ue.app_cfg.ssb_offset_subcarriers);
+  }
+  printf("NR-TOA UE cfg: sdr=%s provider=%s clock=%s time=%s band=%d f=%0.f Fs=%0.f rx_gain=%0.1f tx_gain=%0.1f mode=%u meas_mode=%u full_band_sweep=%u strict_center_freq=%u gain_sweep=%u target_pci=%d target_ssb=%d ssb_scs=%ukHz ssb_freq_offset=%.1fHz ssb_offset_sc=%s pbch_lmax=%u anchor_db_path=%s n_anchors=%d\n",
          ue.app_cfg.sdr,
          ue.provider->name,
          ue.app_cfg.clock_source,
@@ -1072,7 +1079,11 @@ int main(int argc, char **argv)
          (unsigned)ue.app_cfg.strict_center_freq,
          (unsigned)ue.app_cfg.gain_sweep_enable,
          ue.app_cfg.target_pci,
+         ue.app_cfg.target_ssb_index,
          (unsigned)nr_v0_get_ssb_scs_khz(),
+         ue.app_cfg.ssb_freq_offset_hz,
+         ssb_offset_sc_txt,
+         (unsigned)ue.app_cfg.pbch_lmax,
          ue.app_cfg.anchor_db_path,
          ue.n_anchors);
   if (ue.app_cfg.scan_target_count > 0U) {

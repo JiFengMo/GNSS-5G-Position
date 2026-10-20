@@ -13,14 +13,17 @@ int nr_ssb_extract_window(const nr_iq_block_t *blk, const nr_sync_state_t *sync,
   memset(win, 0, sizeof(*win));
   int64_t start = (int64_t)sync->coarse_offset_samp + sync->cum_tracking_shift_samp;
   if (start < 0) {
-    start = 0;
+    return -1;
   }
   if ((uint64_t)start >= blk->nsamps) {
-    start = 0;
+    return -1;
   }
   win->start_samp = (uint32_t)start;
   const uint32_t want = nr_v0_ssb_burst_len_fs(blk->fs_hz);
   const uint32_t rem = blk->nsamps - win->start_samp;
+  if (rem < want) {
+    return -1;
+  }
   win->len_samp = (rem > want) ? want : rem;
   return 0;
 }
@@ -35,6 +38,8 @@ int nr_ssb_demod(const nr_iq_block_t *blk, const nr_ssb_window_t *win,
   const uint32_t nfft = nr_v0_ssb_nfft(blk->fs_hz);
   const int32_t abs_start_symbol = nr_v0_get_ssb_abs_start_symbol();
   const double fs_hz = (blk->fs_hz > 0.0) ? blk->fs_hz : 30720000.0;
+  const double scs_hz = 1000.0 * (double)nr_v0_get_ssb_scs_khz();
+  const double ssb_offset_bins = (scs_hz > 0.0) ? blk->ssb_freq_offset_hz / scs_hz : 0.0;
   const double w = -2.0 * M_PI * (double)cfo_hz / fs_hz;
   if (win->len_samp < nr_v0_ssb_burst_len_fs(blk->fs_hz)) {
     return -1;
@@ -52,7 +57,7 @@ int nr_ssb_demod(const nr_iq_block_t *blk, const nr_ssb_window_t *win,
       return -1;
     }
     for (int rel = 0; rel < NR_SSB_RE_COLS; rel++) {
-      const int k = rel - 120;
+      const double k = (double)(rel - 120) + ssb_offset_bins;
       double sr = 0.0;
       double si = 0.0;
       for (uint32_t n = 0; n < nfft; n++) {
@@ -68,7 +73,7 @@ int nr_ssb_demod(const nr_iq_block_t *blk, const nr_ssb_window_t *win,
           xr = tr;
           xq = tq;
         }
-        const double ph = -2.0 * M_PI * (double)k * (double)n / (double)nfft;
+        const double ph = -2.0 * M_PI * k * (double)n / (double)nfft;
         const double c = cos(ph);
         const double sgn = sin(ph);
         sr += xr * c - xq * sgn;
