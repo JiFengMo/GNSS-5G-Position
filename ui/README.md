@@ -7,6 +7,16 @@
 在仓库根目录执行：
 
 ```bash
+# Linux 一键增量编译并启动接收机与 UI；需要已安装 UHD 等开发依赖
+sh run_5G_only.sh
+
+# 只启动 UI 查看历史记录，无需 UHD 或编译
+sh run_5G_only.sh --ui-only
+```
+
+默认模式下，按 Ctrl+C 同时停止本次启动的接收机与 UI；终端日志写入 `log/launcher/<时间>-<进程号>/`。打开脚本输出的本机地址即可，不会自动启动浏览器。修改配置后重新执行脚本，无需手动完整重编译。以下两终端启动方式仍可使用：
+
+```bash
 # 1. 编译包含监看接口的接收程序（需要已有 UHD 开发环境）
 cmake --preset radio
 cmake --build --preset radio --parallel

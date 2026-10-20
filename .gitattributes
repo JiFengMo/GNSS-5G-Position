@@ -1,0 +1,2 @@
+# 保证 Windows 编辑/检出后的 Linux 启动脚本仍使用 LF 换行。
+*.sh text eol=lf
