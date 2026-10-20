@@ -8,6 +8,7 @@
 | `app/nr-ssb-anchor.c` | 锚点信标发射入口 |
 | `include/nr_config_router.h`、`positioning/common/nr_config_router.c` | 主配置解析与子配置路径选择 |
 | `positioning/common/nr_toa_cfg_loader.c` | 原有 5G 参数解析和默认值 |
+| `positioning/common/nr_monitor.c`、`include/nr_monitor.h` | 限频只读快照、固定容量队列和独立 JSONL 记录线程 |
 | `radio/USRP/usrp_lib.cpp` | UHD 设备接入、采样与硬件时间 |
 | `positioning/common/nr_iq_ring.c` | IQ 环形缓冲 |
 | `positioning/ssb/nr_ssb_sync.c`、`nr_pbch.c` | PSS/SSS、频偏估计、PBCH/DMRS 与 MIB |
@@ -16,6 +17,8 @@
 | `positioning/common/nr_epoch_mgr.c`、`nr_meas_assoc.c`、`nr_pos_solver.c` | 历元、关联及定位解算 |
 
 在线 USRP 接收链路是当前重点。Lime 保留历史接口，尚不能据此认定完整设备收发可用；PRS、商用基站定位和 GNSS 融合仍需分别验证。SSB 同步成功不等同于定位链路已完成验证。
+
+浏览器监看与历史阶段回看见 [UI 使用说明](../../../ui/README.md)。需重新编译带监看接口的接收程序；完整曲线无法从旧文本日志补出。三维定位只留接口。
 
 ## 第三方依赖是什么
 

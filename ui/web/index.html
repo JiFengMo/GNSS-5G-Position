@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NR Observatory · 5G 监看</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><span class="brand-mark">NR<span>·</span></span><div>OBSERVATORY<small>信号观测工作台</small></div></div>
+  <div class="sidebar-label">信号模式</div><div class="mode"><button class="selected">5G NR</button><button disabled title="GNSS 接口预留，尚未实现">GNSS <small>预留</small></button></div>
+  <div class="sidebar-label">工作空间</div>
+  <nav><button class="nav active" data-page="summary"><span>◫</span>Summary<small>概览与状态</small></button><button class="nav" data-page="trace"><span>⌁</span>SSB Trace<small>阶段波形</small></button><button class="nav" data-page="results"><span>↗</span>Results<small>测量与结果</small></button></nav>
+  <div class="sidebar-bottom"><span class="tiny-dot"></span> 只读监看<small>接收程序由终端独立启动<br>NR Monitor / v1.0</small></div>
+</aside>
+<div class="workspace">
+  <header><div><span class="eyebrow">5G NR / SIGNAL INTELLIGENCE</span><h1 id="page-title">Summary <span>概览与状态</span></h1></div><div class="connection"><span class="dot" id="connection-dot"></span><span id="connection-label">等待数据</span><time id="clock">—</time></div></header>
+  <section class="toolbar">
+    <div class="segmented"><button id="live-mode" class="selected">实时监看</button><button id="replay-mode">记录回看</button></div>
+    <label class="cell-select">信号条目 <select id="cell-select"><option value="">暂无信号</option></select></label>
+    <button id="freeze">Ⅱ 冻结画面</button><button id="reload-recordings" class="subtle" title="刷新可回看的记录列表">↻ 刷新记录</button>
+  </section>
+  <section id="replay-bar" class="replay-bar hidden">
+    <label>实验 / 分段 <select id="recording-select"><option value="">选择记录文件</option></select></label>
+    <div class="replay-controls"><button id="page-prev" title="上一页事件">上一页</button><button id="step-prev" aria-label="上一条事件">‹</button><button id="play">▶ 播放</button><button id="step-next" aria-label="下一条事件">›</button><button id="page-next">下一页</button><select id="speed" aria-label="回看速度"><option value="1">1×</option><option value="2">2×</option><option value="5">5×</option></select></div>
+    <input id="timeline" type="range" min="0" max="0" value="0" aria-label="当前页事件时间轴"><span id="replay-position">请选择记录</span>
+  </section>
+  <div id="notice" class="notice">等待接收程序生成监看记录。也可切换“记录回看”查看历史实验。</div>
+  <main>
+  <section id="summary-page" class="page">
+    <div class="metrics"><article class="metric"><span>信号条目</span><strong id="metric-cells">0</strong><small>按频点 / PCI / SSB 区分</small></article><article class="metric"><span>当前有效锁定</span><strong id="metric-locked">0 <em>/ 0</em></strong><small>PBCH 与 MIB 确认，且数据未过期</small></article><article class="metric"><span>实际采样率</span><strong id="metric-rate">—</strong><small>来自接收运行状态</small></article><article class="metric"><span>监看队列丢弃</span><strong id="metric-dropped">0</strong><small>仅监看数据，不等同于采样丢失</small></article></div>
+    <div class="summary-grid"><article class="panel"><div class="panel-heading"><div><span class="eyebrow">PROCESSING PIPELINE</span><h2>接收与同步状态</h2></div><span id="state-badge" class="badge">未连接</span></div><div id="pipeline" class="pipeline"></div><div class="health-grid" id="health"></div></article>
+    <article class="panel"><div class="panel-heading"><div><span class="eyebrow">OBSERVATION CONTEXT</span><h2>场景与时间基准</h2></div></div><dl id="context"></dl><p class="fine">场景声明不等于设备已经同步。绝对 TOA 必须同时满足有效发射时间、时钟状态及独立标定条件。</p></article></div>
+    <article class="panel"><div class="panel-heading"><div><span class="eyebrow">CELL INVENTORY</span><h2>信号与跟踪状态</h2></div><span class="muted">点击条目进入详细 Trace</span></div><div class="table-scroll"><table><thead><tr><th>PCI / SSB</th><th>采集频点</th><th>同步状态</th><th>频偏 · Hz</th><th>SNR · dB</th><th>PSS 指标</th><th>更新</th></tr></thead><tbody id="cell-table"></tbody></table></div></article>
+    <article class="panel"><div class="panel-heading"><div><span class="eyebrow">CONFIGURATION</span><h2>配置快照</h2></div><span class="badge neutral">只读</span></div><div id="config-view" class="config-grid"></div><details><summary>查看当前磁盘配置与路径（可能与已加载值不同）</summary><pre id="disk-config"></pre></details></article>
+  </section>
+  <section id="trace-page" class="page hidden">
+    <article class="panel trace-intro"><div><span class="eyebrow">CAPTURE INSPECTOR</span><h2>SSB 阶段快照</h2><p id="trace-caption" class="muted">等待选中信号的波形快照</p></div><div class="trace-actions"><button id="reset-zoom">重置全部缩放</button><span class="fine">滚轮缩放 · 拖动平移 · 双击恢复</span></div></article>
+    <div id="trace-facts" class="fact-strip"></div>
+    <div class="charts-grid">
+      <article class="panel chart-panel"><h3>01 <span>接收 IQ</span><small>采样点 / ADC 数值 · 抽点显示</small></h3><canvas id="chart-iq" aria-label="接收 IQ 波形"></canvas><div class="legend"><i class="teal"></i>I <i class="blue"></i>Q</div></article>
+      <article class="panel chart-panel"><h3>02 <span>PSS 相关</span><small>搜索采样偏移 / 相关功率 · 分桶保峰</small></h3><canvas id="chart-pss" aria-label="PSS 相关曲线"></canvas><div class="legend"><i class="teal"></i>NID2=0 <i class="blue"></i>NID2=1 <i class="amber"></i>NID2=2</div></article>
+      <article class="panel chart-panel"><h3>03 <span>信道幅度</span><small>PBCH 符号 1 · 相对子载波 / 幅度</small></h3><canvas id="chart-channel" aria-label="信道幅度响应"></canvas></article>
+      <article class="panel chart-panel"><h3>04 <span>信道相位</span><small>PBCH 符号 1 · 相对子载波 / rad</small></h3><canvas id="chart-phase" aria-label="信道相位响应"></canvas></article>
+      <article class="panel chart-panel"><h3>05 <span>信道冲激响应 CIR</span><small>CIR 索引 / 幅度 · 分桶保峰</small></h3><canvas id="chart-cir" aria-label="CIR 曲线"></canvas></article>
+      <article class="panel chart-panel"><h3>06 <span>峰值与小数插值</span><small>CIR 峰值邻域 · 算法使用的三个采样值</small></h3><canvas id="chart-fraction" aria-label="小数时延插值采样点"></canvas></article>
+    </div><p class="fine">每张图来自同一个事件。未到达的处理阶段保持空白；不补造曲线。逐次搜索尝试记录、IQ 重算留待后续扩展。</p>
+  </section>
+  <section id="results-page" class="page hidden">
+    <div class="result-tabs"><button class="selected" data-result="measure">测量结果</button><button data-result="toa">TOA 与距离</button><button data-result="position">位置坐标 <span class="mini">接口预留</span></button></div>
+    <p id="result-status" class="muted" style="margin:0 0 20px;line-height:1.8">尚无选中信号的有效测量</p>
+    <div id="measure-result" class="result-view"><div class="metrics"><article class="metric"><span>选中信号频偏</span><strong id="result-cfo">—</strong><small>锁定状态需结合 Summary 判断</small></article><article class="metric"><span>窗口相对时延</span><strong id="result-delay">—</strong><small>包含窗口与跟踪偏移，不作为传播距离</small></article><article class="metric"><span>窗口均值</span><strong id="result-mean">—</strong><small>当前保留历史中的有效值</small></article><article class="metric"><span>窗口标准差</span><strong id="result-jitter">—</strong><small>不代表绝对测距精度</small></article></div>
+      <div class="charts-grid"><article class="panel chart-panel"><h3>频偏随时间变化<small>相对时间 · s / Hz</small></h3><canvas id="chart-cfo" aria-label="频偏历史"></canvas></article><article class="panel chart-panel"><h3>窗口相对时延随时间变化<small>相对时间 · s / ns</small></h3><canvas id="chart-delay" aria-label="相对时延历史"></canvas></article></div></div>
+    <div id="toa-result" class="result-view hidden"><article class="panel"><div class="panel-heading"><div><span class="eyebrow">RANGING VALIDITY</span><h2>各信号 TOA 与距离</h2></div></div><p class="fine">仅基站同步时，接收时间可能包含钟差；候选 TOA 不作为绝对传播时延或距离。配置选择不会自动完成设备同步或硬件标定。</p><div class="table-scroll"><table><thead><tr><th>PCI / SSB</th><th>采集频点</th><th>TOA · ns</th><th>距离 · m</th><th>有效性 / 原因</th></tr></thead><tbody id="toa-table"></tbody></table></div></article></div>
+    <div id="position-result" class="result-view hidden"><article class="panel reserved"><div class="reserved-icon">⌖</div><span class="eyebrow">POSITIONING INTERFACE</span><h2>三维定位模块待接入</h2><p>保留收发全部同步与接收机钟差两类模型的接口。<br>当前不计算、不显示默认零坐标，也不按基站数量自动判定定位成功。</p><code>valid: false &nbsp; xyz_m: null &nbsp; reason: not_implemented</code></article></div>
+  </section>
+  </main><footer><span>NR OBSERVATORY <b> / </b> 本机只读监看</span><span id="session-label">尚未连接实验</span></footer>
+</div>
+<script src="/app.js"></script>
+</body></html>

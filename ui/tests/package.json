@@ -1,0 +1,6 @@
+{
+  "name": "nr-monitor-browser-qa",
+  "private": true,
+  "description": "Optional browser checks; not needed to run the monitor",
+  "devDependencies": {"playwright": "1.61.1"}
+}

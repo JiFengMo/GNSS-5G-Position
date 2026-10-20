@@ -32,10 +32,11 @@ int main(void)
     "sdr = usrp\nprovider = software_ssb\ncenter_freq_hz = 2114550000\nsample_rate_hz = 30720000\ntarget_pci = 84\nanchor_db_path = anchors.csv\n"));
   CHECK(!put_file("router-fixture/profiles/tx.f", "sdr = usrp\ntx_gain_db = 40\n"));
   CHECK(!put_file("router-fixture/main.f",
-    "enable_5g = 1\nnr_config = profiles/rx.f\nnr_anchor_config = profiles/tx.f\nenable_gnss = 0\ngnss_config = missing.f\nenable_fusion = 0\nfusion_config = missing.f\n"));
+    "enable_5g = 1\nnr_config = profiles/rx.f\nnr_anchor_config = profiles/tx.f\nui_config = profiles/ui.f\nenable_gnss = 0\ngnss_config = missing.f\nenable_fusion = 0\nfusion_config = missing.f\n"));
   CHECK(!nr_toa_load_main_config("router-fixture/main.f", "receiver", &cfg));
   CHECK(cfg.center_freq_hz == 2114550000.0 && cfg.target_pci == 84);
   CHECK(cfg.target_ssb_index == -1); /* preserve old loader defaults */
+  CHECK(!strcmp(cfg.monitor_config_path, "router-fixture/profiles/ui.f"));
   CHECK(!nr_toa_load_anchor_db(cfg.anchor_db_path, anchors, &count) && count == 1);
   CHECK(!nr_toa_load_main_config("router-fixture/main.f", "anchor", &cfg) && cfg.tx_gain_db == 40.0);
   CHECK(!put_file("router-fixture/main.f", "enable_5g = 0\nnr_config = profiles/rx.f\n"));

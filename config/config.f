@@ -2,6 +2,10 @@
 # 填写示例：enable_5g = 1
 enable_5g = 1
 
+# 浏览器监看子配置，相对于本文件；不改变接收算法参数。
+# 填写示例：ui_config = UI/monitor.f
+ui_config = UI/monitor.f
+
 # 5G 接收子配置，相对于本文件所在目录；保留迁移前默认配置的参数。
 # 填写示例：nr_config = 5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f
 nr_config = 5G/ue.toa.ssb.usrpb210.f

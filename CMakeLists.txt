@@ -21,3 +21,13 @@ endif()
 if(BDS5G_BUILD_GNSS)
   add_subdirectory(src/GNSS)
 endif()
+find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_custom_target(nr-monitor-ui
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/ui/server.py" --config "${BDS5G_MAIN_CONFIG}"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" USES_TERMINAL)
+  if(BDS5G_BUILD_TESTS)
+    add_test(NAME monitor_service
+      COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s "${PROJECT_SOURCE_DIR}/ui/tests" -v)
+  endif()
+endif()

@@ -504,6 +504,7 @@ typedef struct {
   nr_meas_mode_t meas_mode;
   int32_t nr_band;
   char anchor_db_path[512];
+  char monitor_config_path[512]; /* Resolved by main-config router; optional. */
   uint8_t trace_enable;
   uint8_t iq_dump_enable;
   uint8_t full_band_sweep;

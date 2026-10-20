@@ -18,3 +18,26 @@ jobs:
         run: |
           build/${{ matrix.preset }}/src/5G/nr-config-check config/config.f receiver
           build/${{ matrix.preset }}/src/5G/nr-config-check config/config.f anchor
+  browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install optional browser QA dependencies
+        run: |
+          npm install --prefix ui/tests --no-audit --no-fund
+          ui/tests/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check monitor and browser interactions
+        run: |
+          python3 -m unittest discover -s ui/tests -v
+          python3 ui/make_demo.py
+          python3 ui/server.py > log/ui-ci.log 2>&1 &
+          monitor_pid=$!
+          trap 'kill "$monitor_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:8765/api/bootstrap > /dev/null; then break; fi
+            sleep 0.2
+          done
+          node ui/tests/browser_smoke.cjs http://127.0.0.1:8765

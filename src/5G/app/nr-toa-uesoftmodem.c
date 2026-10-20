@@ -2,6 +2,7 @@
 #include "nr-toa-threads.h"
 #include "nr_pos_api.h"
 #include "nr_config_router.h"
+#include "nr_monitor.h"
 #include "nr_log_paths.h"
 
 #include <pthread.h>
@@ -680,6 +681,7 @@ static void nr_toa_process_measure_block(PHY_VARS_NR_TOA_UE *UE,
            meas.quality,
            local_sync->cfo_hz);
   }
+  nr_monitor_meas(&meas);
   nr_toa_process_solver_meas(UE, &meas, job_id);
 }
 
@@ -718,6 +720,7 @@ static void *sync_actor_thread(void *arg)
     nr_sync_state_t local = UE->sync;
     pthread_mutex_unlock(&UE->sync_mtx);
 
+    nr_monitor_begin(blk, sync_job_id);
     const int has_real_lock = (local.locked &&
                                local.pbch_ok &&
                                local.pbch_confirmed &&
@@ -869,6 +872,7 @@ static void *sync_actor_thread(void *arg)
         nr_toa_log_cell_ctx(&UE->serving_cell, blk, local.slot);
       }
     }
+    nr_monitor_end(blk, &local, &UE->clk);
     sync_cnt++;
 
     pthread_mutex_lock(&UE->sync_mtx);
@@ -958,6 +962,7 @@ static void *rx_control_thread(void *arg)
          (unsigned)rx_ant);
 
   while (!oai_exit) {
+    nr_monitor_runtime(UE);
     if (UE->state == TOA_STATE_WAIT_CLOCK) {
       if (nr_toa_clock_ready(UE) == 1) {
         UE->state = TOA_STATE_PRESYNC;
@@ -1117,6 +1122,8 @@ int main(int argc, char **argv)
   if (nr_toa_radio_init(&ue.dev, &ue.rf_cfg) != 0) {
     return 1;
   }
+  if (nr_monitor_start(ue.app_cfg.monitor_config_path, &ue.app_cfg) != 0)
+    fprintf(stderr, "monitor: unavailable; receiver continues without UI recording\n");
   if (ue.rf_cfg.sample_rate > 0.0 && fabs(ue.rf_cfg.sample_rate - ue.app_cfg.sample_rate_hz) > 1.0) {
     printf("NR-TOA note: UHD adjusted sample rate from %.0fHz to %.0fHz; using actual rate for timing.\n",
            ue.app_cfg.sample_rate_hz,
@@ -1189,6 +1196,7 @@ int main(int argc, char **argv)
 
   pthread_join(ue.sync_tid, NULL);
   nr_rel_delay_logger_close();
+  nr_monitor_stop();
 
   nr_iq_ring_free(&ue.iq_ring);
   return 0;

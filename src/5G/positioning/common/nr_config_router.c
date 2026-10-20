@@ -36,6 +36,7 @@ int nr_toa_load_main_config(const char *main_path, const char *role, nr_toa_app_
 {
   FILE *fp;
   char line[4096], receiver[2048] = "", anchor[2048] = "";
+  char monitor_path[2048] = "";
   char child_path[4096], resolved[4096];
   unsigned lineno = 0U, seen = 0U;
   int enabled = -1, result = -1;
@@ -61,6 +62,8 @@ int nr_toa_load_main_config(const char *main_path, const char *role, nr_toa_app_
       bit = 2U; if (store_path(receiver, sizeof(receiver), value)) goto invalid;
     } else if (!strcmp(key, "nr_anchor_config")) {
       bit = 4U; if (store_path(anchor, sizeof(anchor), value)) goto invalid;
+    } else if (!strcmp(key, "ui_config")) {
+      bit = 128U; if (store_path(monitor_path, sizeof(monitor_path), value)) goto invalid;
     } else if (!strcmp(key, "enable_gnss") || !strcmp(key, "enable_fusion")) {
       bit = !strcmp(key, "enable_gnss") ? 8U : 16U;
       if (strcmp(value, "0") && strcmp(value, "1")) goto invalid;
@@ -78,6 +81,9 @@ int nr_toa_load_main_config(const char *main_path, const char *role, nr_toa_app_
     if (!*child || relative_to(main_path, child, child_path, sizeof(child_path))) goto done;
   }
   if (nr_toa_load_config(child_path, cfg)) { fprintf(stderr, "Cannot load 5G child config: %s\n", child_path); goto done; }
+  if (*monitor_path &&
+      (relative_to(main_path, monitor_path, resolved, sizeof(resolved)) ||
+       store_path(cfg->monitor_config_path, sizeof(cfg->monitor_config_path), resolved))) goto done;
   if (cfg->anchor_db_path[0] &&
       (relative_to(child_path, cfg->anchor_db_path, resolved, sizeof(resolved)) ||
        store_path(cfg->anchor_db_path, sizeof(cfg->anchor_db_path), resolved))) {

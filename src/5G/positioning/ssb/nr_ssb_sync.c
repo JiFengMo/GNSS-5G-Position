@@ -1,5 +1,6 @@
 #include "nr_pos_types.h"
 #include "nr_pos_api.h"
+#include "nr_monitor.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -373,6 +374,7 @@ int nr_ssb_pss_search(const nr_iq_block_t *blk, nr_pss_hit_t *hits, int max_hits
     pss_q[nid2] = pss_full_q[nid2] + ref_cp_len;
   }
 
+  const int monitor_capture = nr_monitor_capturing();
   double avg_corr[3] = {0.0, 0.0, 0.0};
   uint64_t avg_cnt = 0U;
   int found = 0;
@@ -394,6 +396,7 @@ int nr_ssb_pss_search(const nr_iq_block_t *blk, nr_pss_hit_t *hits, int max_hits
         }
         corr += nr_v0_corr_power_td(blk->rx[ant], n, pss_i[nid2], pss_q[nid2], ref_len);
       }
+      if (monitor_capture) nr_monitor_pss(n, nid2, corr, blk->nsamps, NR_V0_PSS_STEP);
       avg_corr[nid2] += corr;
       if (corr > peak_value) {
         peak_value = corr;

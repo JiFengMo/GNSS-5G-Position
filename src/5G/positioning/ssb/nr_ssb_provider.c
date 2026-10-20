@@ -1,6 +1,7 @@
 #include "nr_pos_provider_if.h"
 #include "nr_pos_api.h"
 #include "nr_log_paths.h"
+#include "nr_monitor.h"
 
 #include <errno.h>
 #include <math.h>
@@ -430,6 +431,7 @@ static int ssb_extract_meas(void *ctx, const nr_iq_block_t *blk,
   if (nr_ssb_interp_channel(&h, &hf) != 0) {
     return -1;
   }
+  nr_monitor_channel(&hf);
   if (nr_ssb_build_cir(&hf, &cir) != 0) {
     return -1;
   }
@@ -439,6 +441,7 @@ static int ssb_extract_meas(void *ctx, const nr_iq_block_t *blk,
   if (nr_toa_refine_fractional(&cir, peak_idx, &frac) != 0) {
     return -1;
   }
+  nr_monitor_cir(&cir, peak_idx, frac);
   if (nr_toa_build_meas(sync, blk, peak_idx, frac, meas) != 0) {
     return -1;
   }

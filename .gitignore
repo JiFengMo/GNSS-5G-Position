@@ -32,3 +32,7 @@ txsig0.m
 .idea/
 __pycache__/
 *.pyc
+
+# Optional browser QA dependencies
+node_modules/
+.playwright-cli/
