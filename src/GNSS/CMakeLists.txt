@@ -1,0 +1,8 @@
+add_library(bds_b1c STATIC bds_b1c/b1c_code.c bds_b1c/b1c_acquisition.c bds_b1c/b1c_tracking.c bds_b1c/b1c_navigation.c)
+target_include_directories(bds_b1c PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(bds_b1c PUBLIC bds5g_observation)
+if(NOT MSVC)
+  target_link_libraries(bds_b1c PUBLIC m)
+endif()
+add_executable(bds-b1c-receiver app/bds_b1c_receiver.c)
+target_link_libraries(bds-b1c-receiver PRIVATE bds_b1c)

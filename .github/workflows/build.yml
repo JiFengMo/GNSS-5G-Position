@@ -1,18 +1,20 @@
-name: build
-
-on:
-  push:
-  pull_request:
-
+name: Build and test
+on: [push, pull_request]
 jobs:
-  core:
-    runs-on: ubuntu-latest
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [offline, radio, all-offline]
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBDS5G_BUILD_TESTS=ON
-      - name: Build
-        run: cmake --build build --parallel
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config libuhd-dev
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }} --parallel 2
+      - run: ctest --preset ${{ matrix.preset }}
+      - name: Check main configuration without opening SDR
+        run: |
+          build/${{ matrix.preset }}/src/5G/nr-config-check config/config.f receiver
+          build/${{ matrix.preset }}/src/5G/nr-config-check config/config.f anchor

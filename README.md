@@ -1,135 +1,94 @@
-# 基于 USRP 的北斗 B1C—5G NR 融合定位系统
+# 北斗—5G 融合定位工程
 
-北斗 B1C 与 5G NR 多源融合定位系统源码，覆盖射频采样、卫星信号处理、蜂窝同步与测距、统一观测建模以及联合位置解算。
+当前优先维护 5G 接收、SSB 同步与 TOA 测量链路；GNSS 和融合代码保留，默认不参与构建。UI 目录预留。
 
-## 功能组成
-
-- 北斗 B1C 主码生成、码相位/多普勒捕获、DLL/PLL 跟踪和导航数据接口。
-- 5G NR PSS/SSS/PBCH 同步、信道估计、CIR、SSB/PRS TOA 测量。
-- USRP B210/UHD 射频设备接口与硬件时间戳管理。
-- 北斗卫星伪距与 5G 基站伪距的统一 ECEF 观测模型。
-- 同时估计接收机位置、北斗钟差和 5G 时间偏差的鲁棒加权最小二乘解算。
-- IQ 回放、公共 CSV 观测接口和数值测试。
-
-## 工程结构
+## 目录
 
 ```text
-.
-|-- apps/                   # 接收、观测转换和定位命令行程序
-|-- include/bds5g/          # 公共数据结构与C API
-|-- src/common/             # 观测文件读写
-|-- src/bds_b1c/            # B1C码、捕获、跟踪和导航处理
-|-- src/nr5g/               # NR TOA与统一观测适配
-|-- src/fusion/             # 双时间偏差鲁棒WLS解算
-|-- configs/                # B210、n78和融合参数
-|-- docs/                   # 架构、数据格式和硬件说明
-|-- tests/                  # 定位解算数值测试
-|-- 5G/                     # NR-TOA完整信号处理与UHD接收代码
-`-- GNSS/                   # SoftGNSS算法参考与历史采样材料
+config/
+  config.f                 主配置：选择各模块的子配置
+  5G/                      接收、锚点、PRS 等子配置及 anchors.csv
+  GNSS/                    北斗子配置预留
+  fusion/                  融合子配置预留
+src/
+  5G/
+    app/                   接收机与锚点程序入口
+    include/               配置、测量与处理接口
+    radio/                 USRP/UHD 后端，Lime 历史接口
+    positioning/common/    IQ 环形缓冲、时间、配置、观测管理与解算
+    positioning/ssb/       PSS/SSS/PBCH、信道估计、SSB TOA
+    positioning/prs/       PRS 提取、信道估计与 TOA
+    tools/                 离线回放、配置检查、日志处理和实验脚本
+    tests/                 离线测试
+    testdata/              历史采样及元数据（大文件不入 Git）
+    third_party/           最小 OAI 依赖、许可及历史兼容文件
+    docs/                  5G 使用与整理说明
+  GNSS/                    B1C 实现、命令行入口及 MATLAB 参考
+  fusion/                  统一观测接口、CSV、适配器与 WLS
+ui/                        显示 UI 预留
+CMakeLists.txt             统一编译入口
+CMakePresets.json          编译预设
 ```
 
-系统架构见 [docs/architecture.md](docs/architecture.md)，公共文件格式见 [docs/data_formats.md](docs/data_formats.md)。
+## 处理框架
 
-## 构建
+```mermaid
+flowchart TD
+    M[config/config.f 主配置] --> R[5G 接收子配置]
+    M --> T[5G 锚点子配置]
+    M -.预留.-> G[GNSS 子配置]
+    M -.预留.-> F[融合子配置]
+    R --> RX[接收程序 / USRP UHD]
+    RX --> IQ[IQ 缓冲与时间戳]
+    IQ --> SYNC[PSS / SSS / PBCH 同步]
+    SYNC --> EST[信道估计 / CIR / TOA]
+    IQ --> PRS[PRS 处理]
+    PRS --> EST
+    EST --> OBS[观测关联 / 历元 / 定位与日志]
+    T --> TX[SSB 生成与定时发射]
+    OBS -.后续接入.-> UI[显示 UI]
+```
 
-### 核心算法和命令行程序
+## 编译与检查
 
-核心构建不依赖 UHD：
+主要运行平台为 Linux，在线 USRP 链路需要 UHD、pthread、pkg-config、C/C++ 编译器和 CMake。预设使用 Ninja，要求 CMake 3.21 以上；不使用预设时要求 CMake 3.16 以上。
 
 ```bash
-cmake -S . -B build -DBDS5G_BUILD_TESTS=ON
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+# 离线算法、回放与测试，不需要 UHD
+cmake --preset offline
+cmake --build --preset offline --parallel
+ctest --preset offline
+
+# 在线接收机、锚点及离线工具，需要安装 UHD 开发包
+cmake --preset radio
+cmake --build --preset radio --parallel
+ctest --preset radio
 ```
 
-生成文件：
+也可直接运行 `cmake -S . -B build/offline -DBDS5G_BUILD_RADIO=OFF`。默认只构建 5G；`BDS5G_BUILD_GNSS` 和 `BDS5G_BUILD_FUSION` 默认均为 OFF。
 
-- `bds-b1c-receiver`
-- `nr5g-toa-receiver`
-- `bds5g-positioning`
-- `test-fusion-wls`
-- `libbds5g_core.a`
+输出位于 `build/<预设名>/src/5G/`：`nr-config-check`、`replay_toa_iq`、6 个测试程序；radio 预设额外生成 `nr-toa-uesoftmodem` 和 `nr-ssb-anchor`。Windows/MinGW 仅用于离线验证，在线设备链路以 Linux 为准。
 
-### UHD/USRP 5G接收链
+## 配置与运行
+
+统一通过 [config/config.f](config/config.f) 选择子配置。每个有效配置项上方都有中文说明和填写示例。子配置路径相对于主配置所在目录，子配置中的 `anchor_db_path` 相对于该子配置所在目录。
 
 ```bash
-cmake -S . -B build-uhd -DBDS5G_BUILD_LEGACY_NR=ON
-cmake --build build-uhd --parallel
+# 不启动设备，检查主配置、所选子配置和锚点表
+./build/offline/src/5G/nr-config-check config/config.f receiver
+./build/offline/src/5G/nr-config-check config/config.f anchor
+
+# 在线运行，两个程序均接收主配置文件
+./build/radio/src/5G/nr-toa-uesoftmodem -O config/config.f
+./build/radio/src/5G/nr-ssb-anchor -O config/config.f
 ```
 
-该构建要求 Linux、UHD 开发包、pthread 和 `pkg-config`。
+例如，要使用已有 PCI84 实验参数，只需在主配置设置：
 
-## 命令行程序
-
-### B1C捕获
-
-输入为交织 `float32 I/Q` 文件：
-
-```bash
-./build/bds-b1c-receiver \
-  --input capture_b1c.cf32 \
-  --prn 19 \
-  --sample-rate 4092000 \
-  --doppler-min -8000 \
-  --doppler-max 8000 \
-  --doppler-step 250
+```ini
+nr_config = 5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f
 ```
 
-输出字段包括 PRN、多普勒频移、码相位、相关峰指标和载噪比。
+默认仍选用原始 `ue.toa.ssb.usrpb210` 配置，频率为 3600 MHz。实际实验请选择已经验证的对应配置。GNSS 和融合的配置路径、启用项目前仅预留，5G 程序不会启动这些模块；原有离线演示仍使用自己的命令行参数。
 
-### 5G TOA观测转换
-
-```bash
-./build/nr5g-toa-receiver \
-  --output nr_observations.csv \
-  --timestamp-ns 1000000000 \
-  --anchor-id 0 --pci 100 \
-  --x -2268000 --y 5009200 --z 3221010 \
-  --toa-ns 845.0 --delay-ns 34.0 \
-  --snr-db 28.5 --peak-metric 9.2
-```
-
-程序执行固定射频链路延时修正，并输出公共伪距观测。后续测量可使用 `--append` 追加。
-
-### 北斗—5G联合定位
-
-```bash
-./build/bds5g-positioning \
-  --observations positioning_epoch.csv \
-  --initial-x -2267800 \
-  --initial-y 5009340 \
-  --initial-z 3220990 \
-  --output solution.json
-```
-
-输出包含 ECEF 坐标、北斗钟差、5G时间偏差、残差 RMS 和参与解算的观测数量。
-
-## 统一观测模型
-
-公共观测方程为：
-
-```text
-pseudorange_i = ||receiver_ecef - source_ecef_i||
-                + clock_bias(system_i)
-                + measurement_error_i
-```
-
-北斗和 5G 分别设置时间偏差状态，防止两套射频设备或两个系统的时间差被吸收到位置结果中。解算器依据每条观测的标准差构造权矩阵，并使用 Huber 权降低异常观测的影响。
-
-## 射频配置
-
-- [configs/bds_b1c_usrp_b210.conf](configs/bds_b1c_usrp_b210.conf)：1575.42 MHz B1C 接收参数。
-- [configs/nr_n78_usrp_b210.conf](configs/nr_n78_usrp_b210.conf)：n78 SSB/TOA 接收参数。
-- [configs/bds5g_fusion.conf](configs/bds5g_fusion.conf)：坐标系、时间尺度与解算参数。
-- [5G/targets/PROJECTS/NR-TOA/CONF](5G/targets/PROJECTS/NR-TOA/CONF)：USRP B210、LimeSDR、PCI扫描和锚点配置。
-
-双 USRP B210 运行时应共享 10 MHz 参考时钟和 PPS，并统一使用 UHD 硬件时间戳；USB 数据包到达时间不参与精密 TOA 计算。
-
-## 测试
-
-`tests/test_fusion_wls.c` 检查混合卫星/基站几何条件下的位置和双时间偏差联合估计。5G 子工程还包含 SSB同步、SSB TOA、PRS TOA、FPGA provider 和定位解算相关测试入口。
-
-## 第三方代码
-
-`GNSS/GNSS_SDR` 包含 SoftGNSS 衍生 MATLAB 代码。公开发布时应保留其 `license.txt` 和原始版权声明。其他来源与发布检查见 [LICENSES/README.md](LICENSES/README.md)。
-
+OAI 等依赖说明、实验工具用法见 [5G 说明](src/5G/docs/README.md)，本次调整与验证范围见 [整理记录](src/5G/docs/reorganization.md)。含硬件加速内容的原版本保存在 `codex/fpga-preserved` 分支。

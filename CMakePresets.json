@@ -2,34 +2,80 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "default",
-      "displayName": "Core algorithms",
+      "name": "offline",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/offline",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
+        "BDS5G_BUILD_5G": "ON",
+        "BDS5G_BUILD_RADIO": "OFF",
         "BDS5G_BUILD_TESTS": "ON",
-        "BDS5G_BUILD_LEGACY_NR": "OFF"
+        "BDS5G_BUILD_GNSS": "OFF",
+        "BDS5G_BUILD_FUSION": "OFF"
       }
     },
     {
-      "name": "uhd",
-      "displayName": "Core algorithms and UHD NR receiver",
+      "name": "radio",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-uhd",
+      "binaryDir": "${sourceDir}/build/radio",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
+        "BDS5G_BUILD_5G": "ON",
+        "BDS5G_BUILD_RADIO": "ON",
         "BDS5G_BUILD_TESTS": "ON",
-        "BDS5G_BUILD_LEGACY_NR": "ON"
+        "BDS5G_BUILD_GNSS": "OFF",
+        "BDS5G_BUILD_FUSION": "OFF"
+      }
+    },
+    {
+      "name": "all-offline",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/all-offline",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BDS5G_BUILD_5G": "ON",
+        "BDS5G_BUILD_RADIO": "OFF",
+        "BDS5G_BUILD_TESTS": "ON",
+        "BDS5G_BUILD_GNSS": "ON",
+        "BDS5G_BUILD_FUSION": "ON"
       }
     }
   ],
   "buildPresets": [
-    {"name": "default", "configurePreset": "default"},
-    {"name": "uhd", "configurePreset": "uhd"}
+    {
+      "name": "offline",
+      "configurePreset": "offline"
+    },
+    {
+      "name": "radio",
+      "configurePreset": "radio"
+    },
+    {
+      "name": "all-offline",
+      "configurePreset": "all-offline"
+    }
   ],
   "testPresets": [
-    {"name": "default", "configurePreset": "default", "output": {"outputOnFailure": true}}
+    {
+      "name": "offline",
+      "configurePreset": "offline",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "radio",
+      "configurePreset": "radio",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "all-offline",
+      "configurePreset": "all-offline",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }
-
