@@ -33,9 +33,9 @@ OAI 派生代码及 MATLAB 参考的原有声明均予保留。许可证文件�
 
 ```bash
 # 输出：终端与指定日志、IQ 和 CSV；下一步检查 SSB_LOCK_EVENT / sync_result
-bash src/5G/tools/run_ssb_outdoor.sh config/config.f /tmp/ssb.log
+bash src/5G/tools/run_ssb_outdoor.sh config/config.f outdoor/receiver.log
 
-# 输出：build/precise_trials_<时间>/ 下的主子配置、日志和 IQ
+# 输出：log/precise_trials_<时间>/ 下的主子配置、日志和 IQ
 # 下一步对照各增益的锁定次数、PBCH 结果和延迟稳定性
 bash src/5G/tools/run_n1_pci84_precise_trials.sh 58 61 64
 
@@ -45,7 +45,11 @@ bash src/5G/tools/run_n1_pci84_precise_trials.sh 58 61 64
 
 在线脚本默认二进制路径为 `build/radio/src/5G/nr-toa-uesoftmodem`，可用 `NR_TOA_BIN` 指定其他编译目录。批量实验脚本生成临时主配置引用对应试验子配置，不绕过主配置入口。
 
-工具中的 `NR_TOA_IQ_DUMP_DIR`、`NR_TOA_DELAY_CSV` 等原有环境变量继续有效，控制诊断输出路径；本次只统一原有业务参数及配置选择，没有扩展全部调试选项的配置格式。`config/5G/nr_n78_reference.f` 是旧离线适配器的参考参数，不能作为在线接收子配置直接使用。
+工具中的 `NR_TOA_IQ_DUMP_DIR`、`NR_TOA_DELAY_CSV` 继续用于选择诊断输出路径，但现在必须位于仓库根目录 `log/` 内：相对值一律相对于 `log/`，绝对值也只能指向其内部，禁止 `..` 路径。例如 `NR_TOA_DELAY_CSV=outdoor/delay.csv` 会写入 `log/outdoor/delay.csv`；原来的 `/tmp/...` 值需要改写。批量脚本的 `OUT_DIR` 和户外脚本的第二个参数遵循同一规则。
+
+直接启动接收机时，延迟 CSV 默认写入 `log/nr_ssb_relative_delay_<时间>.csv`，IQ 默认写入 `log/iq/`；锚点发射记录写入 `log/tx_event.csv`。两个启动脚本会同时记录标准输出和标准错误；直接运行二进制时终端输出仍显示在终端，可用 `tee log/receiver.log` 保存。历史采样和诊断数据已移至本机 `log/archive/5G-testdata/`，不会随 Git 克隆下载。
+
+`config/5G/nr_n78_reference.f` 是旧离线适配器的参考参数，不能作为在线接收子配置直接使用。
 
 ## 配置规则
 

@@ -1,5 +1,6 @@
 #include "nr_pos_provider_if.h"
 #include "nr_pos_api.h"
+#include "nr_log_paths.h"
 
 #include <errno.h>
 #include <math.h>
@@ -122,7 +123,7 @@ static void ssb_dump_candidate_iq(const nr_toa_ue_t *ue,
   static openair0_timestamp_t last_ts = (openair0_timestamp_t)(~0ULL);
   static uint16_t last_pci = 0U;
   static uint8_t last_stage = 0U;
-  const char *dir = NULL;
+  char dir[1024];
   char base[1024];
   char iq_path[1152];
   char meta_path[1152];
@@ -141,11 +142,7 @@ static void ssb_dump_candidate_iq(const nr_toa_ue_t *ue,
     return;
   }
 
-  dir = getenv("NR_TOA_IQ_DUMP_DIR");
-  if (!dir || dir[0] == '\0') {
-    dir = "/tmp/nr_toa_iq";
-  }
-  if (mkdir(dir, 0777) != 0 && errno != EEXIST) {
+  if (nr_log_directory(dir, sizeof(dir), getenv("NR_TOA_IQ_DUMP_DIR"), "iq") != 0) {
     return;
   }
 

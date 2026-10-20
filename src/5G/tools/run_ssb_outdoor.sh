@@ -2,15 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "$ROOT_DIR/src/5G/tools/log_paths.sh"
 BIN="${NR_TOA_BIN:-$ROOT_DIR/build/radio/src/5G/nr-toa-uesoftmodem}"
 DEFAULT_CFG="$ROOT_DIR/config/config.f"
 
 CFG="${1:-$DEFAULT_CFG}"
-LOG_PATH="${2:-/tmp/nr_toa_outdoor_$(date +%Y%m%d_%H%M%S).log}"
-IQ_DIR_DEFAULT="/tmp/nr_toa_iq_outdoor_$(date +%Y%m%d_%H%M%S)"
-DELAY_CSV_DEFAULT="/tmp/nr_toa_delay_outdoor_$(date +%Y%m%d_%H%M%S).csv"
-export NR_TOA_IQ_DUMP_DIR="${NR_TOA_IQ_DUMP_DIR:-$IQ_DIR_DEFAULT}"
-export NR_TOA_DELAY_CSV="${NR_TOA_DELAY_CSV:-$DELAY_CSV_DEFAULT}"
+RUN_DIR="outdoor_$(date +%Y%m%d_%H%M%S)"
+LOG_PATH="$(nr_log_path "${2:-$RUN_DIR/receiver.log}")"
+NR_TOA_IQ_DUMP_DIR="$(nr_log_path "${NR_TOA_IQ_DUMP_DIR:-$RUN_DIR/iq}")"
+NR_TOA_DELAY_CSV="$(nr_log_path "${NR_TOA_DELAY_CSV:-$RUN_DIR/relative_delay.csv}")"
+export NR_TOA_IQ_DUMP_DIR NR_TOA_DELAY_CSV
 
 if [[ ! -x "$BIN" ]]; then
   echo "missing executable: $BIN"
@@ -42,4 +43,4 @@ echo
 echo "Stop with Ctrl+C."
 echo
 
-stdbuf -oL -eL "$BIN" "$CFG" | tee "$LOG_PATH"
+stdbuf -oL -eL "$BIN" "$CFG" 2>&1 | tee "$LOG_PATH"

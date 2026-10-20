@@ -9,7 +9,8 @@ add_library(nr_positioning STATIC ${NR_POSITIONING_SOURCES})
 target_include_directories(nr_positioning PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_CURRENT_SOURCE_DIR}/third_party/oai")
-target_compile_definitions(nr_positioning PUBLIC _GNU_SOURCE NR_DEFAULT_MAIN_CONFIG="${BDS5G_MAIN_CONFIG}")
+target_compile_definitions(nr_positioning PUBLIC _GNU_SOURCE NR_DEFAULT_MAIN_CONFIG="${BDS5G_MAIN_CONFIG}"
+  NR_DEFAULT_LOG_DIR="${PROJECT_SOURCE_DIR}/log")
 target_link_libraries(nr_positioning PUBLIC Threads::Threads)
 if(NOT MSVC)
   target_compile_options(nr_positioning PRIVATE -Wall -Wextra -Wpedantic)
@@ -23,7 +24,7 @@ target_link_libraries(replay_toa_iq PRIVATE nr_positioning)
 add_executable(nr-config-check tools/nr_config_check.c)
 target_link_libraries(nr-config-check PRIVATE nr_positioning)
 if(BDS5G_BUILD_TESTS)
-  foreach(name ssb_sync ssb_toa prs_toa solver provider_select config_router)
+  foreach(name ssb_sync ssb_toa prs_toa solver provider_select config_router log_paths)
     add_executable(test_${name} tests/test_${name}.c)
     target_link_libraries(test_${name} PRIVATE nr_positioning)
     add_test(NAME nr_${name} COMMAND test_${name})

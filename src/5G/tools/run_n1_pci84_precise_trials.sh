@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "$ROOT_DIR/src/5G/tools/log_paths.sh"
 BASE_CFG="$ROOT_DIR/config/5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f"
 BIN="${NR_TOA_BIN:-$ROOT_DIR/build/radio/src/5G/nr-toa-uesoftmodem}"
 TRIAL_SECS="${TRIAL_SECS:-30}"
 GAINS=("$@")
 if [[ ${#GAINS[@]} -eq 0 ]]; then GAINS=(58 61 64); fi
-OUT_DIR="${OUT_DIR:-$ROOT_DIR/build/precise_trials_$(date +%Y%m%d_%H%M%S)}"
+OUT_DIR="$(nr_log_path "${OUT_DIR:-precise_trials_$(date +%Y%m%d_%H%M%S)}")"
 [[ -x "$BIN" ]] || { echo "missing executable: $BIN"; exit 1; }
 [[ -f "$BASE_CFG" ]] || { echo "missing base config: $BASE_CFG"; exit 1; }
 mkdir -p "$OUT_DIR"
@@ -35,8 +36,8 @@ nr_config = pci84_gain${gain}.f
 EOF
   echo "gain=$gain main=$main log=$log iq=$iq_dir"
   status=0
-  timeout "${TRIAL_SECS}s" env NR_TOA_IQ_DUMP_DIR="$iq_dir" \
-    "$BIN" "$main" | tee "$log" || status=$?
+  timeout "${TRIAL_SECS}s" env NR_TOA_IQ_DUMP_DIR="$iq_dir" NR_TOA_DELAY_CSV="$OUT_DIR/pci84_gain${gain}_delay.csv" \
+    "$BIN" "$main" 2>&1 | tee "$log" || status=$?
   if [[ $status -ne 0 && $status -ne 124 ]]; then
     echo "trial failed with status $status" >&2
     exit "$status"

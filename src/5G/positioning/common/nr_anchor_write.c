@@ -1,4 +1,5 @@
 #include "nr_pos_types.h"
+#include "nr_log_paths.h"
 #include "radio/COMMON/common_lib.h"
 
 #include <stdio.h>
@@ -30,7 +31,9 @@ int nr_anchor_log_tx_event(const nr_ssb_tx_plan_t *plan)
   static int initialized = 0;
   static FILE *fp = NULL;
   if (!initialized) {
-    fp = fopen("tx_event.csv", "w");
+    char path[4096];
+    if (nr_log_file_path(path, sizeof(path), NULL, "tx_event.csv") != 0) return -1;
+    fp = fopen(path, "w");
     if (!fp) {
       return -1;
     }

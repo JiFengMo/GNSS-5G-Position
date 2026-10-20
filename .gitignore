@@ -1,5 +1,7 @@
 # Build outputs and local migration audit
 /build/
+/log/
+*.log
 /build-*/
 /out/
 /.cache/

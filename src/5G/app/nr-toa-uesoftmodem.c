@@ -2,6 +2,7 @@
 #include "nr-toa-threads.h"
 #include "nr_pos_api.h"
 #include "nr_config_router.h"
+#include "nr_log_paths.h"
 
 #include <pthread.h>
 #include <limits.h>
@@ -386,6 +387,7 @@ static int nr_rel_delay_logger_init(void)
   const char *env_path = getenv("NR_TOA_DELAY_CSV");
   time_t now = 0;
   struct tm tm_now;
+  char filename[128];
 
   if (g_rel_delay_logger.fp || g_rel_delay_logger.enabled) {
     return 0;
@@ -394,15 +396,15 @@ static int nr_rel_delay_logger_init(void)
   memset(&g_rel_delay_logger, 0, sizeof(g_rel_delay_logger));
   g_rel_delay_logger.enabled = 1U;
 
-  if (env_path && env_path[0] != '\0') {
-    snprintf(g_rel_delay_logger.path, sizeof(g_rel_delay_logger.path), "%s", env_path);
-  } else {
-    now = time(NULL);
-    localtime_r(&now, &tm_now);
-    snprintf(g_rel_delay_logger.path, sizeof(g_rel_delay_logger.path),
-             "/tmp/nr_ssb_relative_delay_%04d%02d%02d_%02d%02d%02d.csv",
-             tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday,
-             tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+  now = time(NULL);
+  localtime_r(&now, &tm_now);
+  snprintf(filename, sizeof(filename),
+           "nr_ssb_relative_delay_%04d%02d%02d_%02d%02d%02d.csv",
+           tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday,
+           tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+  if (nr_log_file_path(g_rel_delay_logger.path, sizeof(g_rel_delay_logger.path), env_path, filename) != 0) {
+    g_rel_delay_logger.enabled = 0U;
+    return -1;
   }
 
   g_rel_delay_logger.fp = fopen(g_rel_delay_logger.path, "w");
@@ -1104,7 +1106,7 @@ int main(int argc, char **argv)
   if (ue.app_cfg.iq_dump_enable) {
     const char *dump_dir = getenv("NR_TOA_IQ_DUMP_DIR");
     printf("NR-TOA note: IQ near-miss dump enabled, dir=%s\n",
-           (dump_dir && dump_dir[0] != '\0') ? dump_dir : "/tmp/nr_toa_iq");
+           (dump_dir && dump_dir[0] != '\0') ? dump_dir : NR_DEFAULT_LOG_DIR "/iq");
   }
   if (nr_rel_delay_logger_init() != 0) {
     printf("NR-TOA note: relative delay CSV logger init failed; continuing without CSV output.\n");
