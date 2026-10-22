@@ -37,7 +37,7 @@ JSONL 公共字段：`schema: 1`、`kind`、`run_id`、`time_ms`（Unix 毫秒�
 
 ## 北斗离线接口 v1
 
-以上 `/api/state`、JSONL 与 `position_solver` 契约用于 5G，继续保持原有语义。北斗使用独立索引与接口，`/api/bootstrap` 的 `gnss` 字段声明 `offline: true`、`live: false` 和已配置记录目录。服务支持 `--signal bds` 指定默认页面，以及 `--port` 指定本进程端口；二者不控制设备或运行算法。
+以上 `/api/state`、JSONL 与 `position_solver` 契约用于 5G，继续保持原有语义。北斗使用独立索引与接口，`/api/bootstrap` 的 `gnss` 字段声明 `offline: true`、`live: true` 和已配置离线记录目录。服务支持 `--signal bds` 指定默认页面，`--bds-source live` 指定默认实采视图，`--port` 指定本进程端口；这些参数不控制设备或运行算法。
 
 | GET 接口 | 内容 |
 |---|---|
@@ -52,3 +52,13 @@ JSONL 公共字段：`schema: 1`、`kind`、`run_id`、`time_ms`（Unix 毫秒�
 `position` 是游标之前最近的离线结果；还需检查 `position_current` 和 `position.valid`。`position.available_s` 表示用星对应的完整电文最晚收齐时刻，允许晚于定位采样时刻；客户端必须标注离线回溯性质。`position_history` 只含游标前结果，采样压缩保留无效分隔项（只有 `time_s` 和 `valid: 0`）；客户端不应把这些项当作零坐标。`frames[].available_s <= cursor_s`，不会提前列出尚未收齐帧。
 
 单星 `series` 仍使用 `{x,y,original_points}`，横坐标单位为秒，值的单位见对应导出列。分桶保留极值，代次变化/间断/无效位置插入 null 断线；不包含完整捕获曲面或原始 IQ。`events` 最多返回游标前最近 60 项，当前视窗之前的事件可在事件表中追溯。导入要求和展示边界见 [gnss.md](gnss.md)。
+
+## 北斗实采接口 v1
+
+`GET /api/gnss/live?prn=<number>&window=30` 读取 `log/gnss-live/` 最新实验分段，返回与北斗离线 `state` 类似的结构以及 `live`；没有记录时返回 `waiting: true`。`GET /api/gnss/live/frames?prn=<number>&offset=0&limit=20` 查询当前缓存的已收齐帧，最多 50 条。没有写入或设备控制接口。
+
+实采 JSONL 与 5G JSONL 使用独立目录和记录类型：`config.data.kind = b1c_live`，另有 `hardware_origin`、`runtime`、`acquisition`、`tracking`、`frame`、`position`、`event`、`gap`。每段重复配置；计数均保留字符串，非有限数序列化为 null。`runtime` 包含 `running`、`stage`、收到/处理/队列样本数、队列丢弃、UHD overflow、间断、延迟、参考与 PPS 状态。实际硬件参数保存在已加载配置的 `device` 中。
+
+`live.connected` 要求程序报告运行且状态不超过 3 秒；`live.current` 另要求处理滞后不超过 2 秒且 reader 没有未读积压。当前锁定和定位用星以此为门限，历史数据仍保留作诊断。定位还检查 `position_current` 和 `position.valid`。在线 `position.available_s <= position.time_s`，观测只能使用已完整接收且同代次/连续段的有效帧；不会沿用离线回溯模式。
+
+reader 每请求最多读取 4 MiB、单行 256 KiB；每星 12000 跟踪历元/256 帧、800 定位项、240 事件。半行等待续写，损坏行计数并跳过；跳过数据的曲线断开。只保留滚动历史，不提供完整实采归档回放。

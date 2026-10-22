@@ -10,6 +10,7 @@ let browser;
   const page=await browser.newPage({viewport:{width:1536,height:1080}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+'/#gnss');
+  await page.locator('#g-offline-mode').click();
   await page.waitForFunction(()=>document.querySelector('#g-used').textContent==='6');
   assert.equal(await page.locator('#g-captured').innerText(),'7');
   assert.equal(await page.locator('#g-tracked').innerText(),'7 / 7');
@@ -84,6 +85,7 @@ let browser;
   // empty-data view as well, without modifying any user recordings.
   await page.route('**/api/gnss/runs',route=>route.fulfill({json:{runs:[]}}));
   await page.reload();
+  await page.locator('#g-offline-mode').click();
   await page.waitForSelector('#g-empty:visible');
   const instructions=await page.locator('#g-empty pre').innerText();
   assert.match(instructions,/python3 ui\/import_gnss.py/);

@@ -50,7 +50,22 @@
         "BDS5G_BUILD_RADIO": "OFF",
         "BDS5G_BUILD_TESTS": "ON",
         "BDS5G_BUILD_GNSS": "ON",
-        "BDS5G_BUILD_FUSION": "OFF"
+        "BDS5G_BUILD_FUSION": "OFF",
+        "BDS5G_BUILD_GNSS_RADIO": "OFF"
+      }
+    },
+    {
+      "name": "gnss-radio",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/gnss-radio",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BDS5G_BUILD_5G": "OFF",
+        "BDS5G_BUILD_RADIO": "OFF",
+        "BDS5G_BUILD_TESTS": "ON",
+        "BDS5G_BUILD_GNSS": "ON",
+        "BDS5G_BUILD_FUSION": "OFF",
+        "BDS5G_BUILD_GNSS_RADIO": "ON"
       }
     }
   ],
@@ -70,6 +85,10 @@
     {
       "name": "gnss-offline",
       "configurePreset": "gnss-offline"
+    },
+    {
+      "name": "gnss-radio",
+      "configurePreset": "gnss-radio"
     }
   ],
   "testPresets": [
@@ -97,6 +116,13 @@
     {
       "name": "gnss-offline",
       "configurePreset": "gnss-offline",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "gnss-radio",
+      "configurePreset": "gnss-radio",
       "output": {
         "outputOnFailure": true
       }

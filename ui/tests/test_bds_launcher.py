@@ -64,6 +64,26 @@ class BDSLauncherTests(unittest.TestCase):
             launch_bds.run_child(['example'])
         child.terminate.assert_called_once();self.assertEqual(child.wait.call_count,2)
 
+    def test_radio_config_serial_and_no_iq_file_argument(self):
+        source=Path(__file__).resolve().parents[2]/'config/GNSS/bds_b1c.f'
+        content=source.read_text(encoding='utf-8-sig');self.config.write_text(content,encoding='utf-8')
+        job=launch_bds.radio_settings(self.config);command=launch_bds.radio_command(job,'test-only')
+        self.assertNotIn('--serial',command);self.assertNotIn('--input',command)
+        self.assertEqual(job['clock_source'],'external');self.assertEqual(job['time_source'],'external')
+        job['serial']='1234567';command=launch_bds.radio_command(job,'test-only')
+        self.assertEqual(command[command.index('--serial')+1],'1234567')
+        for old,new in [('device_args = type=b200','device_args = type=b200,serial=duplicate'),('queue_seconds = 16','queue_seconds = nan'),('pll_bandwidth_hz = 18','pll_bandwidth_hz = 20')]:
+            self.config.write_text(content.replace(old,new),encoding='utf-8')
+            with self.assertRaises(ValueError):launch_bds.radio_settings(self.config)
+
+    def test_receiver_failure_stops_own_ui(self):
+        ui=Mock();ui.poll.return_value=None
+        rx=Mock();rx.poll.return_value=3;rx.args=['test-only-receiver']
+        response=MagicMock();response.__enter__.return_value.status=200
+        with patch.object(launch_bds.subprocess,'Popen',side_effect=[ui,rx]),patch.object(launch_bds,'urlopen',return_value=response),self.assertRaises(subprocess.CalledProcessError):
+            launch_bds.supervise_live(['test-only'],['test-only-ui'],self.root,18766)
+        ui.terminate.assert_called_once();rx.terminate.assert_not_called()
+
     def test_occupied_port_is_rejected_without_temporary_bind(self):
         probe=MagicMock();probe.__enter__.return_value=probe;probe.connect_ex.return_value=0
         with patch.object(sys,'argv',['launch_bds.py','--ui-only','--config',str(self.config)]), \

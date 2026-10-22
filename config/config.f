@@ -19,7 +19,7 @@ nr_anchor_config = 5G/anchor0.ssb.usrpb210.f
 # 填写示例：enable_gnss = 0
 enable_gnss = 0
 
-# 北斗在线设备配置预留；独立离线脚本使用 config/GNSS/offline.f。
+# 北斗实采配置；run_BDS_only.sh 默认读取它，--offline 另读 GNSS/offline.f。
 # 填写示例：gnss_config = GNSS/bds_b1c.f
 gnss_config = GNSS/bds_b1c.f
 

@@ -6,18 +6,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: [offline, radio, all-offline]
+        preset: [offline, radio, all-offline, gnss-radio]
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config libuhd-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config libuhd-dev libfftw3-dev
       - run: cmake --preset ${{ matrix.preset }}
       - run: cmake --build --preset ${{ matrix.preset }} --parallel 2
       - run: ctest --preset ${{ matrix.preset }}
       - name: Check main configuration without opening SDR
+        if: matrix.preset != 'gnss-radio'
         run: |
           build/${{ matrix.preset }}/src/5G/nr-config-check config/config.f receiver
           build/${{ matrix.preset }}/src/5G/nr-config-check config/config.f anchor
+      - name: Check BDS radio configuration without opening SDR
+        if: matrix.preset == 'gnss-radio'
+        run: sh run_BDS_only.sh --check
   browser:
     runs-on: ubuntu-24.04
     steps:
@@ -41,3 +45,14 @@ jobs:
             sleep 0.2
           done
           node ui/tests/browser_smoke.cjs http://127.0.0.1:8765
+      - name: Check BDS live UI with isolated synthetic display records
+        run: |
+          mkdir -p build
+          python3 -u ui/tests/test_gnss_live.py --serve build/live-ui-ci 18866 > build/live-ui-ci.log 2>&1 &
+          live_ui_pid=$!
+          trap 'kill "$live_ui_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:18866/api/bootstrap > /dev/null; then break; fi
+            sleep 0.2
+          done
+          node ui/tests/gnss_live_browser_smoke.cjs http://127.0.0.1:18866 build/live-ui-ci/test-only/events-000001.jsonl

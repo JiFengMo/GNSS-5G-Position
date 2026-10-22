@@ -1,6 +1,6 @@
 # 北斗—5G 融合定位工程
 
-5G 提供接收、SSB 同步、TOA 测量与本机浏览器监看。GNSS 已支持北斗 B1C 离线捕获、连续跟踪、电文与星历、卫星位置和钟差、统一采样历元伪距及单点定位，并通过 MATLAB 基线对照；北斗离线结果已接入网页 UI，由独立脚本启动。GNSS 默认不参与 5G 构建，LDPC 纠错和 GNSS 在线接入尚未实现。
+5G 提供接收、SSB 同步、TOA 测量与本机浏览器监看。GNSS 已支持北斗 B1C 捕获、连续跟踪、电文与星历、卫星位置和钟差、统一采样历元伪距及单点定位，核心算法经过 MATLAB 基线对照。独立北斗脚本默认启动 B210 实采和实时 UI，也保留显式离线验证与结果回看。实采链路已在 UHD 4.6 环境编译并通过模拟流程测试，目标 B210 射频和持续运行性能尚待验收。GNSS 默认不参与 5G 构建，LDPC 纠错尚未实现。
 
 ## 目录
 
@@ -8,7 +8,7 @@
 config/
   config.f                 主配置：选择各模块的子配置
   5G/                      接收、锚点、PRS 等子配置及 anchors.csv
-  GNSS/                    北斗离线任务配置与在线设备配置预留
+  GNSS/                    北斗 B210 设备配置与独立离线任务配置
   fusion/                  融合子配置预留
   UI/                      浏览器监看、记录频率与场景声明
 src/
@@ -29,7 +29,8 @@ ui/                        三页浏览器 UI、Python 本机服务与回看工�
 log/                       运行日志、诊断 CSV、IQ 和本机验证日志（不入 Git）
 CMakeLists.txt             统一编译入口
 CMakePresets.json          编译预设
-run_5G_only.sh                     Linux 一键增量编译与启动
+run_5G_only.sh              Linux 5G 一键增量编译与启动
+run_BDS_only.sh             Linux 北斗 B210 实采与 UI；--offline 验证文件算法
 ```
 
 ## 处理框架
@@ -38,7 +39,9 @@ run_5G_only.sh                     Linux 一键增量编译与启动
 flowchart TD
     M[config/config.f 主配置] --> R[5G 接收子配置]
     M --> T[5G 锚点子配置]
-    M -.预留.-> G[GNSS 子配置]
+    M --> G[GNSS 子配置 / 独立北斗入口]
+    G --> BDS[B210 采样 / B1C 捕获跟踪 / 电文与定位]
+    BDS --> BUI[北斗实时 UI / 离线结果回看]
     M -.预留.-> F[融合子配置]
     R --> RX[接收程序 / USRP UHD]
     RX --> IQ[IQ 缓冲与时间戳]
@@ -93,7 +96,7 @@ ctest --preset radio
 nr_config = 5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f
 ```
 
-默认仍选用原始 `ue.toa.ssb.usrpb210` 配置，频率为 3600 MHz。实际实验请选择已经验证的对应配置。GNSS 和融合的配置路径、启用项目前仅预留，5G 程序不会启动这些模块；原有离线演示仍使用自己的命令行参数。
+默认仍选用原始 `ue.toa.ssb.usrpb210` 配置，频率为 3600 MHz。实际实验请选择已经验证的对应配置。北斗独立脚本读取 `gnss_config`；5G 程序不会启动北斗或融合模块，统一调度启用项仍预留。
 
 OAI 等依赖说明、实验工具用法见 [5G 说明](src/5G/docs/README.md)，本次调整与验证范围见 [整理记录](src/5G/docs/reorganization.md)。含硬件加速内容的原版本保存在 `codex/fpga-preserved` 分支。
 
@@ -107,9 +110,11 @@ OAI 等依赖说明、实验工具用法见 [5G 说明](src/5G/docs/README.md)�
 
 随后可用 `bds-b1c-position` 计算 MEO/IGSO 卫星位置与钟差，在同一采样点构造各星伪距，并联合估计接收机 ECEF 坐标与钟差。现有记录已获得 278 个有效定位历元，与原 MATLAB 解算一致；运行命令和模型范围见 [北斗单点定位](src/GNSS/docs/positioning.md)。这些结果验证了移植的一致性，尚无天线真值用于确认绝对定位精度。
 
-北斗离线结果现已接入同一个网页 UI：选择“北斗 B1C”，查看概览、单星跟踪、导航与定位结果，并按统一采样时间回放。支持 ENU 散布、逐星伪距与排除原因、电文与星历，明确区分采样时刻和电文收齐时刻。导入与使用见 [北斗 UI](ui/gnss.md)。GNSS 在线输入尚未接入。
+北斗接入同一个网页 UI：支持实时概览、单星跟踪、导航与定位，也能回看已导入的离线结果。显示 ENU 散布、逐星伪距与排除原因、电文与星历，区分在线因果解和离线回溯解。导入与使用见 [北斗 UI](ui/gnss.md)。
 
-Linux 在根目录运行 `sh run_BDS_only.sh`，按 `config/GNSS/offline.f` 增量构建并执行捕获、跟踪、电文、定位与导入，完成后在 <http://127.0.0.1:8766/> 启动北斗页面。先将离线配置中的 IQ 路径和采样参数改为实际值；只查看已有记录用 `sh run_BDS_only.sh --ui-only`。北斗与 5G 分别启动，默认端口分别为 8766 和 8765。
+Linux 在根目录运行 `sh run_BDS_only.sh`，按 `config/GNSS/bds_b1c.f` 增量构建 `gnss-radio`，打开 B210 并直接开始采集、捕获、连续跟踪、电文与在线定位，在 <http://127.0.0.1:8766/> 实时监看。`serial` 留空选择默认发现设备；填写后严格匹配，找不到报错。默认使用已接入的外部 10 MHz/PPS；实际接口与增益需核对。构建和实机验收见 [B210 接收链路](src/GNSS/docs/live_receiver.md)。
+
+`sh run_BDS_only.sh --offline` 才按 `config/GNSS/offline.f` 处理 IQ 文件，先把文件路径与采样参数改为真实值。只查看已有离线结果用 `sh run_BDS_only.sh --ui-only`。`--check` 只验证所选模式配置，不打开设备。北斗与 5G 分别启动，默认端口分别为 8766 和 8765。
 
 ## 浏览器监看
 
@@ -172,15 +177,15 @@ python3 ui/server.py --config config/config.f
 - 本机 Windows/MinGW/Ninja 完成包含 GNSS、融合和监看模块的离线构建，10 项 CTest 通过；其中 UI 服务测试包含 7 个 Python 用例。
 - 4 项原算法测试（SSB 同步、SSB TOA、PRS TOA、解算）的输出与修改前基线逐字节一致。
 - 本机 Chromium 检查覆盖页面切换、单信号 Trace、缩放、回看分页与播放、失锁、冻结/恢复，以及含钟差或未标定时不显示绝对距离。
-- GitHub Actions 配置了 Linux `offline`、`radio`、`all-offline` 构建/测试与独立浏览器检查。
-- 北斗离线 UI 与独立启动入口已实现；本次 WSL `all-offline` 构建的 19 项 CTest 与 21 个 Python 用例通过，真实参考记录的北斗浏览器检查及原 5G 页面回归通过，见 [北斗 UI 验收](ui/validation_gnss_2026-10-22.md)。
-- GNSS 在线输入、5G/融合三维定位界面、参数编辑/设备控制、逐次搜索调试和 IQ 重算暂未实现。连续 SSB 接收与 UI 开销仍需在目标 Linux/USRP 环境实测。
+- GitHub Actions 配置了 Linux `offline`、`radio`、`all-offline`、`gnss-radio` 构建/测试与独立浏览器检查。
+- 北斗 B210 实采与独立启动入口已实现；本次 WSL `all-offline` 的 21 项 CTest 与 30 个 Python 用例通过，真实 UHD 接收程序编译通过。新增在线因果解算、接收替身生命周期和实时 UI 检查见 [B210 链路与验收](src/GNSS/docs/live_receiver.md)；此前离线 UI 验证见 [验收记录](ui/validation_gnss_2026-10-22.md)。
+- 5G/融合三维定位界面、参数编辑/设备控制、逐次搜索调试和 IQ 重算暂未实现。北斗 B210 实物接收、外部时钟状态与算力开销，以及连续 SSB 接收与 UI 开销，仍需在目标 Linux/USRP 环境实测。
 
 ## 日志与 WSL
 
 所有运行日志集中在根目录 `log/`，程序会自动创建所需子目录。接收机延迟 CSV、锚点 `tx_event.csv`、IQ 诊断和启动脚本的标准输出/错误均使用这里；历史采样、日志移至本机 `log/archive/`。整个 `log/` 被 Git 忽略，复制给 Linux 测试电脑时可以按需携带，提交 GitHub 时不包含这些数据。
 
-WSL 的用途是提前做 Linux 编译、离线算法回归和配置检查；实际 USRP 同步、USB 流量与射频性能仍在原 Linux 测试电脑上验证。当前本机 Ubuntu 24.04 WSL 已有 GCC/G++、pkg-config，尚缺 CMake、Ninja 和 UHD 开发库。本次未自动安装系统软件。补齐后可在 WSL 中按上面的 `offline` / `radio` 预设构建；Windows 和 Linux 的构建产物应使用不同目录。
+WSL 的用途是提前做 Linux 编译、离线算法回归和配置检查；实际 USRP 同步、USB 流量与射频性能仍在原 Linux 测试电脑上验证。本机 Ubuntu 24.04 WSL 已有 GCC/G++、CMake、Ninja、FFTW3 和 UHD 4.6 开发库，并已用于本次构建。Windows 和 Linux 的构建产物应使用不同目录。
 
 此前日志整理阶段已直接使用本机 WSL GCC 13.3 编译并运行 8 项离线测试（含日志路径测试及融合 WLS），全部通过；两个在线 C 入口的语法检查、主配置加载、启动脚本的标准输出/错误日志归档检查也通过。这是 UI 增加之前的验证记录，不能替代本版 UI 的 Linux 实机检查。对应编译产物位于本机 `build/wsl-gcc/`，验证日志位于 `log/build/wsl-gcc-<时间>/`。
 

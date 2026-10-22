@@ -1,6 +1,6 @@
 #!/bin/sh
-# Linux 北斗独立入口：sh run_BDS_only.sh；只回看：sh run_BDS_only.sh --ui-only。
-# 输出：build/gnss-offline/、log/gnss/runs/、log/gnss-ui/ 和 log/launcher/。
+# Linux 北斗 B210 实采：sh run_BDS_only.sh；离线验证：加 --offline；只回看：加 --ui-only。
+# 输出：build/gnss-radio/、log/gnss-live/ 和 log/launcher/；默认不保存原始 IQ。
 # 下一步：打开终端打印的北斗网页地址；Ctrl+C 停止本次任务。
 set -eu
 cd -- "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"

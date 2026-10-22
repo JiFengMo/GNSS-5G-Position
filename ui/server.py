@@ -13,8 +13,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, parse_qs
 if __package__:
     from .gnss import GNSSStore
+    from .gnss_live import LiveStore
 else:
     from gnss import GNSSStore
+    from gnss_live import LiveStore
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_LINE = 256 * 1024
@@ -25,7 +27,7 @@ DEFAULTS = dict(enabled="1", port="8765", poll_interval_ms="200", status_interva
                 absolute_toa_calibrated="0",gnss_record_dir="gnss-ui")
 
 
-def read_config(path: Path) -> dict[str, str]:
+def read_config(path: Path,allow_empty_keys=()) -> dict[str, str]:
     result = {}
     for no, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
         line = line.strip()
@@ -34,7 +36,7 @@ def read_config(path: Path) -> dict[str, str]:
         if "=" not in line:
             raise ValueError(f"{path}:{no}: expected key = value")
         key, value = (p.strip() for p in line.split("=", 1))
-        if not value or key in result:
+        if (not value and key not in allow_empty_keys) or key in result:
             raise ValueError(f"{path}:{no}: empty or duplicate item")
         result[key] = value
     return result
@@ -312,6 +314,7 @@ class MonitorStore:
 def make_server(settings: dict, store: MonitorStore, port: int | None = None):
     static = Path(__file__).parent / "web"
     gnss=GNSSStore(settings.get("gnss_directory",ROOT/"log/gnss-ui"))
+    live=LiveStore(settings.get('gnss_live_directory',ROOT/"log/gnss-live"))
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -332,7 +335,12 @@ def make_server(settings: dict, store: MonitorStore, port: int | None = None):
                 if parsed.path == "/api/bootstrap":
                     self.send_json(dict(settings={k: v for k, v in settings.items() if k in DEFAULTS},
                                         disk_config=settings["disk_config"], record_dir=str(settings["directory"]),
-                                        gnss={"offline":True,"live":False,"record_dir":str(gnss.directory)}))
+                                        gnss={"offline":True,"live":True,"record_dir":str(gnss.directory)}))
+                elif parsed.path == "/api/gnss/live":
+                    self.send_json(live.snapshot(prn=int(args["prn"][0]) if args.get("prn",[""])[0] else None,
+                        window=float(args.get("window",["30"])[0])))
+                elif parsed.path == "/api/gnss/live/frames":
+                    self.send_json(live.frame_page(int(args.get("prn",["0"])[0]),int(args.get("offset",["0"])[0]),int(args.get("limit",["20"])[0])))
                 elif parsed.path == "/api/gnss/runs":
                     self.send_json({"runs":gnss.recordings()})
                 elif parsed.path == "/api/gnss/state":
@@ -358,6 +366,8 @@ def make_server(settings: dict, store: MonitorStore, port: int | None = None):
                         signal = settings.get("default_signal", "5g")
                         data = data.replace(b'data-default-signal="5g"',
                                             b'data-default-signal="bds"' if signal == "bds" else b'data-default-signal="5g"')
+                        if settings.get("bds_live"):
+                            data=data.replace(b'data-bds-source="offline"',b'data-bds-source="live"')
                     mime = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}[path.suffix]
                     self.send_response(200); self.send_header("Content-Type", mime + "; charset=utf-8")
                     self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control", "no-cache")
@@ -377,6 +387,7 @@ def main():
     parser.add_argument("--config", type=Path, default=ROOT / "config/config.f", help="Master config path")
     parser.add_argument("--port", type=int, help="Override UI port for this process (1024..65535)")
     parser.add_argument("--signal", choices=("5g", "bds"), default="5g", help="Initial page only; does not start a receiver")
+    parser.add_argument("--bds-source",choices=("offline","live"),default="offline",help="Initial BDS view only")
     args = parser.parse_args()
     try:
         settings = load_settings(args.config)
@@ -385,6 +396,7 @@ def main():
                 raise ValueError("UI port must be 1024..65535")
             settings["port"] = args.port
         settings["default_signal"] = args.signal
+        settings["bds_live"] = args.bds_source=="live"
     except (OSError, ValueError, KeyError) as exc:
         parser.exit(2, f"Configuration error: {exc}\n")
     store = MonitorStore(settings); store.start()
