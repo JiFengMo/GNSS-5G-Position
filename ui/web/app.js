@@ -10,7 +10,7 @@ const state = {mode:"live", page:"summary", result:"measure", selected:"", froze
 
 class Plot {
   constructor(id) {
-    this.canvas=$(id); this.lines=[]; this.zoom=[0,1]; this.hover=null; this.drag=null;
+    this.canvas=$(id); this.lines=[]; this.zoom=[0,1]; this.hover=null; this.drag=null;this.markers=[];this.equal=false;
     const c=this.canvas;
     c.addEventListener("wheel", e => {e.preventDefault(); const rect=c.getBoundingClientRect(), p=Math.max(0,Math.min(1,(e.clientX-rect.left-48)/(rect.width-65))); const [a,b]=this.zoom, width=Math.min(1,Math.max(.015,(b-a)*Math.exp(e.deltaY*.0015))), anchor=a+p*(b-a); let left=Math.max(0,Math.min(1-width,anchor-p*width)); this.zoom=[left,left+width]; this.draw();}, {passive:false});
     c.addEventListener("pointerdown", e => {this.drag={x:e.clientX,zoom:[...this.zoom]}; c.setPointerCapture(e.pointerId);});
@@ -33,17 +33,19 @@ class Plot {
     if(!points.length){ctx.fillStyle="#a1b0ba";ctx.font="12px system-ui";ctx.textAlign="center";ctx.fillText(this.empty||"暂无数据",w/2,h/2);return;}
     let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
     for(const [x]of points){xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);} if(xmin===xmax)xmax=xmin+1;
-    const span=xmax-xmin, x0=xmin+this.zoom[0]*span,x1=xmin+this.zoom[1]*span;
+    const span=xmax-xmin;let x0=xmin+this.zoom[0]*span,x1=xmin+this.zoom[1]*span;
     for(const [x,y]of points)if(x>=x0&&x<=x1){ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);}
     if(!finite(ymin)){ymin=0;ymax=1;} if(ymin===ymax){ymin-=Math.max(1,Math.abs(ymin)*.1);ymax+=Math.max(1,Math.abs(ymax)*.1);}
     const pad=(ymax-ymin)*.12;ymin-=pad;ymax+=pad;
+    if(this.equal){const aspect=(right-left)/(bottom-top),ys=(x1-x0)/aspect;if(ys>ymax-ymin){const m=(ymin+ymax)/2;ymin=m-ys/2;ymax=m+ys/2;}else{const m=(x0+x1)/2,s=(ymax-ymin)*aspect;x0=m-s/2;x1=m+s/2;}}
     const px=x=>left+(x-x0)/(x1-x0)*(right-left), py=y=>bottom-(y-ymin)/(ymax-ymin)*(bottom-top);
     const tick=v=>Math.abs(v)>=10000 || (Math.abs(v)>0&&Math.abs(v)<.001) ? v.toExponential(1) : String(Number(v.toPrecision(4)));
     ctx.font="9px system-ui";ctx.lineWidth=1;
     for(let i=0;i<=4;i++){const y=top+(bottom-top)*i/4;ctx.strokeStyle="#edf1f3";ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();ctx.textAlign="right";ctx.fillStyle="#94a5b0";ctx.fillText(tick(ymax-(ymax-ymin)*i/4),left-8,y+3);}
     for(let i=0;i<=4;i++){const x=left+(right-left)*i/4;ctx.textAlign="center";ctx.fillStyle="#94a5b0";ctx.fillText(tick(x0+(x1-x0)*i/4),x,bottom+17);}
     ctx.save();ctx.beginPath();ctx.rect(left,top,right-left,bottom-top);ctx.clip();
-    this.lines.forEach((line,k)=>{ctx.strokeStyle=colors[k%colors.length];ctx.lineWidth=1.4;ctx.beginPath();let open=false;for(let i=0;i<line.x.length;i++){const x=line.x[i],y=line.y[i];if(!finite(x)||!finite(y)){open=false;continue;}if(!open){ctx.moveTo(px(x),py(y));open=true;}else ctx.lineTo(px(x),py(y));}ctx.stroke();if(line.x.length<8){ctx.fillStyle=colors[k%colors.length];for(let i=0;i<line.x.length;i++){if(!finite(line.y[i]))continue;ctx.beginPath();ctx.arc(px(line.x[i]),py(line.y[i]),3.2,0,Math.PI*2);ctx.fill();}}});
+    this.lines.forEach((line,k)=>{ctx.strokeStyle=line.color||colors[k%colors.length];ctx.lineWidth=1.4;ctx.beginPath();let open=false;for(let i=0;i<line.x.length;i++){const x=line.x[i],y=line.y[i];if(!finite(x)||!finite(y)){open=false;continue;}if(!open){ctx.moveTo(px(x),py(y));open=true;}else if(!line.scatter)ctx.lineTo(px(x),py(y));}if(!line.scatter)ctx.stroke();if(line.scatter||line.x.length<8){ctx.fillStyle=line.color||colors[k%colors.length];for(let i=0;i<line.x.length;i++){if(!finite(line.x[i])||!finite(line.y[i]))continue;ctx.beginPath();ctx.arc(px(line.x[i]),py(line.y[i]),line.scatter?2.5:3.2,0,Math.PI*2);ctx.fill();}}});
+    ctx.strokeStyle="#c3934388";ctx.setLineDash([4,4]);for(const m of this.markers){if(m.x<x0||m.x>x1)continue;ctx.beginPath();ctx.moveTo(px(m.x),top);ctx.lineTo(px(m.x),bottom);ctx.stroke();}ctx.setLineDash([]);
     ctx.restore();
     if(this.hover!==null&&this.hover>=left&&this.hover<=right){const target=x0+(this.hover-left)/(right-left)*(x1-x0);let nearest=null;for(const p of points)if(!nearest||Math.abs(p[0]-target)<Math.abs(nearest[0]-target))nearest=p;if(nearest){ctx.strokeStyle="#9bb4bd";ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(px(nearest[0]),top);ctx.lineTo(px(nearest[0]),bottom);ctx.stroke();ctx.setLineDash([]);ctx.textAlign="left";ctx.fillStyle="#496b7c";ctx.fillText(`x ${tick(nearest[0])}  ·  y ${tick(nearest[1])}`,left+6,10);}}
   }
@@ -64,12 +66,14 @@ function validity(e,d) {
   return {valid:true,reason:"满足已声明的绝对 TOA 条件"};
 }
 function choosePage(page) {
+  if(window.GNSS?.active()){window.GNSS.choosePage(page);return;}
   state.page=page;const names={summary:["Summary","概览与状态"],trace:["SSB Trace","阶段波形"],results:["Results","测量与结果"]};
   for(const k of Object.keys(names))$(k+"-page").classList.toggle("hidden",k!==page);
   document.querySelectorAll(".nav").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
   $("page-title").innerHTML=names[page][0]+" <span>"+names[page][1]+"</span>"; render(true);
 }
 function render(force=false) {
+  if(window.GNSS?.active())return;
   const d=state.data;if(!d||!state.bootstrap)return;
   $("clock").textContent=stamp(d.now_ms);
   const demo=!!d.config?.demo, replay=state.mode==="replay";
@@ -120,6 +124,7 @@ function render(force=false) {
 }
 function resetPlots(){Object.values(plots).forEach(p=>p.reset());}
 async function refresh(){
+  if(window.GNSS?.active())return;
   if(state.mode!=="live"||state.frozen||state.fetchPending||!state.bootstrap)return;
   state.fetchPending=true;
   try{const requested=state.selected;const data=await api("/api/state?cell="+encodeURIComponent(requested));if(state.mode!=="live"||state.frozen||requested!==state.selected)return;state.data=data;state.error="";render();}

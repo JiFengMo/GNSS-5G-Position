@@ -22,6 +22,10 @@ trace_interval_ms = 1000
 # 填写示例：record_dir = monitor
 record_dir = monitor
 
+# 北斗离线 UI 实验目录，相对于仓库 log/；由 ui/import_gnss.py 导入。
+# 填写示例：gnss_record_dir = gnss-ui
+gnss_record_dir = gnss-ui
+
 # 每段记录的大小上限，单位 MiB，范围 1～512；达到后轮换。
 # 填写示例：segment_mb = 128
 segment_mb = 128

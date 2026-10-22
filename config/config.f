@@ -14,11 +14,12 @@ nr_config = 5G/ue.toa.ssb.usrpb210.f
 # 填写示例：nr_anchor_config = 5G/anchor1.ssb.usrpb210.f
 nr_anchor_config = 5G/anchor0.ssb.usrpb210.f
 
-# 北斗启用标记：0 暂不运行，1 为后续计划启用；当前 5G 程序不会启动北斗。
+# 统一模块调度预留标记；当前 5G 程序不会启动北斗。
+# 显式执行 run_BDS_only.sh 时由独立脚本启动，不读取此标记。
 # 填写示例：enable_gnss = 0
 enable_gnss = 0
 
-# 北斗子配置路径，相对于本文件所在目录；当前预留，尚未接入在线加载。
+# 北斗在线设备配置预留；独立离线脚本使用 config/GNSS/offline.f。
 # 填写示例：gnss_config = GNSS/bds_b1c.f
 gnss_config = GNSS/bds_b1c.f
 

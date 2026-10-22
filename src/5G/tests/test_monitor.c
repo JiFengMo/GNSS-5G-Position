@@ -14,6 +14,7 @@ int main(void)
   char relative_dir[160]; snprintf(relative_dir,sizeof(relative_dir),"tests/monitor/%ld-%ld",(long)started.tv_sec,(long)started.tv_usec);
   fputs("enabled = 1\nstatus_interval_ms = 200\ntrace_interval_ms = 500\n",fp);
   fprintf(fp,"record_dir = %s\n",relative_dir);
+  fputs("gnss_record_dir = gnss-ui\n",fp);
   fputs("segment_mb = 1\nmax_segments = 2\nsource_mode = controlled\ntime_model = shared\nabsolute_toa_calibrated = 0\n", fp); fclose(fp);
   nr_toa_app_cfg_t cfg; memset(&cfg, 0, sizeof(cfg)); cfg.sample_rate_hz = 30720000; cfg.center_freq_hz = 3600000000;
   strcpy(cfg.sdr_addrs, "serial=example\"\\test");

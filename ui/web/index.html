@@ -1,16 +1,17 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NR Observatory · 5G 监看</title><link rel="stylesheet" href="/style.css"></head>
-<body>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Observatory · 5G / 北斗</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/gnss.css"></head>
+<body data-default-signal="5g">
 <aside class="sidebar">
-  <div class="brand"><span class="brand-mark">NR<span>·</span></span><div>OBSERVATORY<small>信号观测工作台</small></div></div>
-  <div class="sidebar-label">信号模式</div><div class="mode"><button class="selected">5G NR</button><button disabled title="GNSS 接口预留，尚未实现">GNSS <small>预留</small></button></div>
+  <div class="brand"><span class="brand-mark" id="brand-mark">NR<span>·</span></span><div>OBSERVATORY<small>信号观测工作台</small></div></div>
+  <div class="sidebar-label">信号模式</div><div class="mode"><button class="selected" id="signal-5g">5G NR</button><button id="signal-gnss">北斗 B1C</button></div>
   <div class="sidebar-label">工作空间</div>
   <nav><button class="nav active" data-page="summary"><span>◫</span>Summary<small>概览与状态</small></button><button class="nav" data-page="trace"><span>⌁</span>SSB Trace<small>阶段波形</small></button><button class="nav" data-page="results"><span>↗</span>Results<small>测量与结果</small></button></nav>
   <div class="sidebar-bottom"><span class="tiny-dot"></span> 只读监看<small>接收程序由终端独立启动<br>NR Monitor / v1.0</small></div>
 </aside>
 <div class="workspace">
-  <header><div><span class="eyebrow">5G NR / SIGNAL INTELLIGENCE</span><h1 id="page-title">Summary <span>概览与状态</span></h1></div><div class="connection"><span class="dot" id="connection-dot"></span><span id="connection-label">等待数据</span><time id="clock">—</time></div></header>
+  <header><div><span class="eyebrow" id="signal-eyebrow">5G NR / SIGNAL INTELLIGENCE</span><h1 id="page-title">Summary <span>概览与状态</span></h1></div><div class="connection"><span class="dot" id="connection-dot"></span><span id="connection-label">等待数据</span><time id="clock">—</time></div></header>
+  <div id="nr-shell">
   <section class="toolbar">
     <div class="segmented"><button id="live-mode" class="selected">实时监看</button><button id="replay-mode">记录回看</button></div>
     <label class="cell-select">信号条目 <select id="cell-select"><option value="">暂无信号</option></select></label>
@@ -50,7 +51,10 @@
     <div id="toa-result" class="result-view hidden"><article class="panel"><div class="panel-heading"><div><span class="eyebrow">RANGING VALIDITY</span><h2>各信号 TOA 与距离</h2></div></div><p class="fine">仅基站同步时，接收时间可能包含钟差；候选 TOA 不作为绝对传播时延或距离。配置选择不会自动完成设备同步或硬件标定。</p><div class="table-scroll"><table><thead><tr><th>PCI / SSB</th><th>采集频点</th><th>TOA · ns</th><th>距离 · m</th><th>有效性 / 原因</th></tr></thead><tbody id="toa-table"></tbody></table></div></article></div>
     <div id="position-result" class="result-view hidden"><article class="panel reserved"><div class="reserved-icon">⌖</div><span class="eyebrow">POSITIONING INTERFACE</span><h2>三维定位模块待接入</h2><p>保留收发全部同步与接收机钟差两类模型的接口。<br>当前不计算、不显示默认零坐标，也不按基站数量自动判定定位成功。</p><code>valid: false &nbsp; xyz_m: null &nbsp; reason: not_implemented</code></article></div>
   </section>
-  </main><footer><span>NR OBSERVATORY <b> / </b> 本机只读监看</span><span id="session-label">尚未连接实验</span></footer>
+  </main></div>
+  <div id="gnss-shell" class="hidden"></div>
+  <footer><span>OBSERVATORY <b> / </b> 本机只读监看</span><span id="session-label">尚未连接实验</span></footer>
 </div>
 <script src="/app.js"></script>
+<script src="/gnss.js"></script>
 </body></html>

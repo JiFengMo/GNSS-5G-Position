@@ -1,0 +1,39 @@
+{
+  "source": "MATLAB-exported vectors, no C output used",
+  "matlab_version": "24.2.0.2712019 (R2024b)",
+  "reference_files": [
+    {
+      "path": "initSettings.m",
+      "sha256": "eb2b35be53d65f4a3fe790f7d07c0f178dfb8e0767314d84f3a0cb5050adeab0"
+    },
+    {
+      "path": "include/acquisition.m",
+      "sha256": "e992845e6fc774e5f5a70c2b69fb608d4858376a99156641f94f09578e2e87e1"
+    },
+    {
+      "path": "include/generateDataBOC11.m",
+      "sha256": "33a722848fedb25e46e66b23a0ca3edf88529146a098a567ef1b75db58c124de"
+    },
+    {
+      "path": "include/generatePilotBOC11.m",
+      "sha256": "a72114565ce83d33f1bfb4516fa8b4acb2bc24f4aa173100ac10600334760669"
+    },
+    {
+      "path": "include/generate2ndCode.m",
+      "sha256": "2399341bf962a5bbcee620928eeb829a88d444d3f5ae40abb8aeff40d4df49a8"
+    },
+    {
+      "path": "include/makeDataTable.m",
+      "sha256": "63586e42db7d8282217e95ae1df7f8648177b813c77ba80aac702d1912e2cb69"
+    },
+    {
+      "path": "include/makePilotTable.m",
+      "sha256": "3953afb79bcfc691123a98d7894d5f763aa169ecc374aff85eb2e524747c77e5"
+    },
+    {
+      "path": "include/JacobiSymbol.m",
+      "sha256": "80bacf33e5b7141760db2da4ac912c3b031617767d0075dbf908d21127f7f6ee"
+    }
+  ],
+  "hash": "FNV-1a 64 over signed int8 bipolar bytes; full binary comparisons also supported"
+}

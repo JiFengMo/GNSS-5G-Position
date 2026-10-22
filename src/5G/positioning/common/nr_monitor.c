@@ -216,7 +216,7 @@ int nr_monitor_start(const char *path, const nr_toa_app_cfg_t *cfg)
     else if (!strcmp(key, "source_mode")) { if (strcmp(value,"controlled") && strcmp(value,"commercial")) goto invalid; strcpy(monitor.source, value); }
     else if (!strcmp(key, "time_model")) { if (strcmp(value,"shared") && strcmp(value,"receiver_bias")) goto invalid; strcpy(monitor.model, value); }
     else if (!strcmp(key, "absolute_toa_calibrated")) { if (*end || v > 1) goto invalid; monitor.calibrated = (int)v; }
-    else if (strcmp(key,"port") && strcmp(key,"poll_interval_ms") && strcmp(key,"max_history") && strcmp(key,"stale_after_ms")) goto invalid;
+    else if (strcmp(key,"port") && strcmp(key,"poll_interval_ms") && strcmp(key,"max_history") && strcmp(key,"stale_after_ms") && strcmp(key,"gnss_record_dir")) goto invalid;
   }
   fclose(fp); if (!enabled) return 0;
   if (nr_log_directory(monitor.directory, sizeof(monitor.directory), directory, "monitor")) return -1;

@@ -1,6 +1,6 @@
 # 北斗—5G 融合定位工程
 
-当前优先维护 5G 接收、SSB 同步与 TOA 测量链路，提供本机浏览器监看与记录回看。GNSS 和融合代码保留，默认不参与构建；三维定位模块暂不实现。
+5G 提供接收、SSB 同步、TOA 测量与本机浏览器监看。GNSS 已支持北斗 B1C 离线捕获、连续跟踪、电文与星历、卫星位置和钟差、统一采样历元伪距及单点定位，并通过 MATLAB 基线对照；北斗离线结果已接入网页 UI，由独立脚本启动。GNSS 默认不参与 5G 构建，LDPC 纠错和 GNSS 在线接入尚未实现。
 
 ## 目录
 
@@ -8,7 +8,7 @@
 config/
   config.f                 主配置：选择各模块的子配置
   5G/                      接收、锚点、PRS 等子配置及 anchors.csv
-  GNSS/                    北斗子配置预留
+  GNSS/                    北斗离线任务配置与在线设备配置预留
   fusion/                  融合子配置预留
   UI/                      浏览器监看、记录频率与场景声明
 src/
@@ -97,6 +97,20 @@ nr_config = 5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f
 
 OAI 等依赖说明、实验工具用法见 [5G 说明](src/5G/docs/README.md)，本次调整与验证范围见 [整理记录](src/5G/docs/reorganization.md)。含硬件加速内容的原版本保存在 `codex/fpga-preserved` 分支。
 
+## 北斗 B1C 离线捕获
+
+北斗离线开发使用独立的 `gnss-offline` 编译预设，依赖 FFTW3；支持 int8/float32 IQ、完整码周期捕获和精细频率搜索。完整编译、运行、MATLAB 基线和验收命令见 [北斗 B1C 离线捕获](src/GNSS/docs/offline_acquisition.md)。GNSS 工具由独立 `run_BDS_only.sh` 调度，不由 5G 启动脚本调度。
+
+捕获后可用 `bds-b1c-track` 进行多通道连续跟踪、质量判定和有界重捕获，输出逐历元 CSV、事件和摘要。运行与基线对照命令见 [连续跟踪说明](src/GNSS/docs/tracking.md)。
+
+跟踪后可用 `bds-b1c-nav` 读取逐历元 CSV，进行导频子码同步、BCH 检查、解交织、双 CRC24Q 校验，输出逐帧 BDT 时间和星历；沿用 MATLAB 的系统信息位直取路径，暂不进行 LDPC 纠错。现有 60 秒记录的 7 颗卫星共 21 帧通过验证，运行与限制见 [导航电文说明](src/GNSS/docs/navigation.md)。
+
+随后可用 `bds-b1c-position` 计算 MEO/IGSO 卫星位置与钟差，在同一采样点构造各星伪距，并联合估计接收机 ECEF 坐标与钟差。现有记录已获得 278 个有效定位历元，与原 MATLAB 解算一致；运行命令和模型范围见 [北斗单点定位](src/GNSS/docs/positioning.md)。这些结果验证了移植的一致性，尚无天线真值用于确认绝对定位精度。
+
+北斗离线结果现已接入同一个网页 UI：选择“北斗 B1C”，查看概览、单星跟踪、导航与定位结果，并按统一采样时间回放。支持 ENU 散布、逐星伪距与排除原因、电文与星历，明确区分采样时刻和电文收齐时刻。导入与使用见 [北斗 UI](ui/gnss.md)。GNSS 在线输入尚未接入。
+
+Linux 在根目录运行 `sh run_BDS_only.sh`，按 `config/GNSS/offline.f` 增量构建并执行捕获、跟踪、电文、定位与导入，完成后在 <http://127.0.0.1:8766/> 启动北斗页面。先将离线配置中的 IQ 路径和采样参数改为实际值；只查看已有记录用 `sh run_BDS_only.sh --ui-only`。北斗与 5G 分别启动，默认端口分别为 8766 和 8765。
+
 ## 浏览器监看
 
 UI 与接收程序运行在同一台 Linux 电脑，共用一个主配置。UI 运行只需要 Python 3.9+ 与现代浏览器，不需要 pip、npm、CDN 或 GPU 算法加速。**本版增加了 C 端监看接口，从旧版升级时需要重新编译接收程序；继续运行旧二进制，无法得到新增的阶段波形。**
@@ -159,7 +173,8 @@ python3 ui/server.py --config config/config.f
 - 4 项原算法测试（SSB 同步、SSB TOA、PRS TOA、解算）的输出与修改前基线逐字节一致。
 - 本机 Chromium 检查覆盖页面切换、单信号 Trace、缩放、回看分页与播放、失锁、冻结/恢复，以及含钟差或未标定时不显示绝对距离。
 - GitHub Actions 配置了 Linux `offline`、`radio`、`all-offline` 构建/测试与独立浏览器检查。
-- GNSS UI、三维定位算法、参数编辑/设备控制、逐次搜索调试和 IQ 重算暂未实现。连续 SSB 接收与 UI 开销仍需在目标 Linux/USRP 环境实测。
+- 北斗离线 UI 与独立启动入口已实现；本次 WSL `all-offline` 构建的 19 项 CTest 与 21 个 Python 用例通过，真实参考记录的北斗浏览器检查及原 5G 页面回归通过，见 [北斗 UI 验收](ui/validation_gnss_2026-10-22.md)。
+- GNSS 在线输入、5G/融合三维定位界面、参数编辑/设备控制、逐次搜索调试和 IQ 重算暂未实现。连续 SSB 接收与 UI 开销仍需在目标 Linux/USRP 环境实测。
 
 ## 日志与 WSL
 

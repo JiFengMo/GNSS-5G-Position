@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Local, read-only 5G monitor. Python 3.9+, standard library only."""
+"""Local, read-only 5G monitor and B1C offline result viewer. Standard library only."""
 from __future__ import annotations
 import argparse
 from collections import OrderedDict, deque
 import json
 import math
+import sqlite3
 from pathlib import Path
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, parse_qs
+if __package__:
+    from .gnss import GNSSStore
+else:
+    from gnss import GNSSStore
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_LINE = 256 * 1024
@@ -17,7 +22,7 @@ READ_BUDGET = 4 * 1024 * 1024
 DEFAULTS = dict(enabled="1", port="8765", poll_interval_ms="200", status_interval_ms="200",
                 trace_interval_ms="1000", record_dir="monitor", segment_mb="128", max_segments="8",
                 max_history="5000", stale_after_ms="5000", source_mode="controlled", time_model="shared",
-                absolute_toa_calibrated="0")
+                absolute_toa_calibrated="0",gnss_record_dir="gnss-ui")
 
 
 def read_config(path: Path) -> dict[str, str]:
@@ -60,8 +65,12 @@ def load_settings(main_path: Path, root: Path = ROOT) -> dict:
     directory = (log_root / requested).resolve()
     if not directory.is_relative_to(log_root) or directory == log_root:
         raise ValueError("record_dir must be inside log/")
+    gnss_requested=Path(settings["gnss_record_dir"])
+    gnss_directory=(log_root/gnss_requested).resolve()
+    if ".." in gnss_requested.parts or not gnss_directory.is_relative_to(log_root) or gnss_directory==log_root:
+        raise ValueError("gnss_record_dir must be inside log/")
     child = (main_path.parent / main["nr_config"]).resolve()
-    settings.update(directory=directory, main_path=main_path, ui_path=ui_path,
+    settings.update(directory=directory,gnss_directory=gnss_directory,main_path=main_path, ui_path=ui_path,
                     disk_config={"main_path": str(main_path), "nr_path": str(child), "ui_path": str(ui_path),
                                  "main": main, "nr": read_config(child)})
     return settings
@@ -302,6 +311,7 @@ class MonitorStore:
 
 def make_server(settings: dict, store: MonitorStore, port: int | None = None):
     static = Path(__file__).parent / "web"
+    gnss=GNSSStore(settings.get("gnss_directory",ROOT/"log/gnss-ui"))
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -321,7 +331,18 @@ def make_server(settings: dict, store: MonitorStore, port: int | None = None):
             try:
                 if parsed.path == "/api/bootstrap":
                     self.send_json(dict(settings={k: v for k, v in settings.items() if k in DEFAULTS},
-                                        disk_config=settings["disk_config"], record_dir=str(settings["directory"])))
+                                        disk_config=settings["disk_config"], record_dir=str(settings["directory"]),
+                                        gnss={"offline":True,"live":False,"record_dir":str(gnss.directory)}))
+                elif parsed.path == "/api/gnss/runs":
+                    self.send_json({"runs":gnss.recordings()})
+                elif parsed.path == "/api/gnss/state":
+                    self.send_json(gnss.snapshot(args.get("run",[""])[0],
+                        time_s=float(args["time"][0]) if "time" in args else None,
+                        prn=int(args["prn"][0]) if args.get("prn",[""])[0] else None,
+                        window=float(args.get("window",["30"])[0])))
+                elif parsed.path == "/api/gnss/frames":
+                    self.send_json(gnss.frame_page(args.get("run",[""])[0],float(args.get("time",["0"])[0]),
+                        int(args.get("prn",["0"])[0]),int(args.get("offset",["0"])[0]),int(args.get("limit",["20"])[0])))
                 elif parsed.path == "/api/state":
                     self.send_json(store.snapshot(args.get("cell", [""])[0]))
                 elif parsed.path == "/api/recordings":
@@ -330,16 +351,20 @@ def make_server(settings: dict, store: MonitorStore, port: int | None = None):
                     self.send_json(replay_page(settings["directory"], args.get("file", [""])[0],
                                                int(args.get("offset", ["0"])[0]),
                                                generation=float(args["generation"][0]) if "generation" in args else None))
-                elif parsed.path in ("/", "/index.html", "/app.js", "/style.css"):
+                elif parsed.path in ("/", "/index.html", "/app.js", "/gnss.js", "/style.css", "/gnss.css"):
                     path = static / ("index.html" if parsed.path == "/" else parsed.path[1:])
                     data = path.read_bytes()
+                    if path.suffix == ".html":
+                        signal = settings.get("default_signal", "5g")
+                        data = data.replace(b'data-default-signal="5g"',
+                                            b'data-default-signal="bds"' if signal == "bds" else b'data-default-signal="5g"')
                     mime = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}[path.suffix]
                     self.send_response(200); self.send_header("Content-Type", mime + "; charset=utf-8")
                     self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control", "no-cache")
                     self.end_headers(); self.wfile.write(data)
                 else:
                     self.send_json({"error": "Not found"}, 404)
-            except (ValueError, KeyError, OSError) as exc:
+            except (ValueError, KeyError, OSError,sqlite3.Error) as exc:
                 self.send_json({"error": str(exc)}, 400)
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -350,9 +375,16 @@ def make_server(settings: dict, store: MonitorStore, port: int | None = None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=ROOT / "config/config.f", help="Master config path")
+    parser.add_argument("--port", type=int, help="Override UI port for this process (1024..65535)")
+    parser.add_argument("--signal", choices=("5g", "bds"), default="5g", help="Initial page only; does not start a receiver")
     args = parser.parse_args()
     try:
         settings = load_settings(args.config)
+        if args.port is not None:
+            if not 1024 <= args.port <= 65535:
+                raise ValueError("UI port must be 1024..65535")
+            settings["port"] = args.port
+        settings["default_signal"] = args.signal
     except (OSError, ValueError, KeyError) as exc:
         parser.exit(2, f"Configuration error: {exc}\n")
     store = MonitorStore(settings); store.start()
@@ -360,9 +392,11 @@ def main():
         server = make_server(settings, store)
     except OSError as exc:
         store.stop.set()
-        parser.exit(2, f"Cannot bind 127.0.0.1:{settings['port']}: {exc}\nChange port in {settings['ui_path']} if needed.\n")
-    print(f"5G monitor: http://127.0.0.1:{settings['port']}  [read only]", flush=True)
+        hint="Choose another --port value" if args.port is not None else f"Change port in {settings['ui_path']}"
+        parser.exit(2, f"Cannot bind 127.0.0.1:{settings['port']}: {exc}\n{hint} if needed.\n")
+    print(f"5G / B1C UI: http://127.0.0.1:{settings['port']}  [read only]", flush=True)
     print(f"Records: {settings['directory']}", flush=True)
+    print(f"B1C offline experiments: {settings['gnss_directory']}",flush=True)
     try:
         server.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:

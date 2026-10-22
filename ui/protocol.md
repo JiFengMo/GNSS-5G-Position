@@ -34,3 +34,21 @@ JSONL 公共字段：`schema: 1`、`kind`、`run_id`、`time_ms`（Unix 毫秒�
 ```
 
 未来定位模块必须提供坐标系、观测时刻、实际参与的独立锚点及质量信息；不会从 PCI/SSB 条目数直接推导有效定位。控制接口作为未来独立能力扩展，当前 `capabilities.control`、`iq_recompute`、`position_solver` 均为 false。
+
+## 北斗离线接口 v1
+
+以上 `/api/state`、JSONL 与 `position_solver` 契约用于 5G，继续保持原有语义。北斗使用独立索引与接口，`/api/bootstrap` 的 `gnss` 字段声明 `offline: true`、`live: false` 和已配置记录目录。服务支持 `--signal bds` 指定默认页面，以及 `--port` 指定本进程端口；二者不控制设备或运行算法。
+
+| GET 接口 | 内容 |
+|---|---|
+| `/api/gnss/runs` | `gnss_record_dir` 下已完成导入的实验摘要，以导入时间倒序排列 |
+| `/api/gnss/state?run=<id>&time=<seconds>&prn=<number>&window=30` | 选定采样时刻的状态、四种数量、逐星跟踪/观测/排除信息、单星曲线、定位历史、事件与最近帧 |
+| `/api/gnss/frames?run=<id>&time=<seconds>&prn=<number>&offset=0&limit=20` | 该游标前已收齐帧的分页列表、总数与游标，最多 50 条 |
+
+`state` 中 `time` 省略时使用实验默认时刻：最后一个定位历元，或跟踪记录末尾；`prn` 省略时选择首颗记录卫星。时间限制到实验边界，非有限参数和不属于实验的 PRN 返回 HTTP 400。窗口必须大于 0 且不超过 120 秒。实验 ID 只允许导入目录名，不接受任意路径；SQLite 以 `mode=ro` 打开，没有写入 HTTP 接口。
+
+`run` 包含算法配置快照、源文件 SHA256、采样率和 `offline_retrospective: true`。`cursor_s` 与各对象 `time_s` 是输入文件相对采样时间；`absolute_sample`、`generation`、`epoch` 等 64 位计数以字符串返回。`satellites[].tracking` 仅在当前时刻落入该跟踪历元的半开采样区间时存在；`last_tracking` 可作为诊断保留，但不冒充当前有效数据。`navigation_ready` 要求已收齐的有效帧与当前有效跟踪属于同一连续段。
+
+`position` 是游标之前最近的离线结果；还需检查 `position_current` 和 `position.valid`。`position.available_s` 表示用星对应的完整电文最晚收齐时刻，允许晚于定位采样时刻；客户端必须标注离线回溯性质。`position_history` 只含游标前结果，采样压缩保留无效分隔项（只有 `time_s` 和 `valid: 0`）；客户端不应把这些项当作零坐标。`frames[].available_s <= cursor_s`，不会提前列出尚未收齐帧。
+
+单星 `series` 仍使用 `{x,y,original_points}`，横坐标单位为秒，值的单位见对应导出列。分桶保留极值，代次变化/间断/无效位置插入 null 断线；不包含完整捕获曲面或原始 IQ。`events` 最多返回游标前最近 60 项，当前视窗之前的事件可在事件表中追溯。导入要求和展示边界见 [gnss.md](gnss.md)。

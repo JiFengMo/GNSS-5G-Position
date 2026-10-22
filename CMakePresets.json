@@ -39,6 +39,19 @@
         "BDS5G_BUILD_GNSS": "ON",
         "BDS5G_BUILD_FUSION": "ON"
       }
+    },
+    {
+      "name": "gnss-offline",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/gnss-offline",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BDS5G_BUILD_5G": "OFF",
+        "BDS5G_BUILD_RADIO": "OFF",
+        "BDS5G_BUILD_TESTS": "ON",
+        "BDS5G_BUILD_GNSS": "ON",
+        "BDS5G_BUILD_FUSION": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -53,6 +66,10 @@
     {
       "name": "all-offline",
       "configurePreset": "all-offline"
+    },
+    {
+      "name": "gnss-offline",
+      "configurePreset": "gnss-offline"
     }
   ],
   "testPresets": [
@@ -73,6 +90,13 @@
     {
       "name": "all-offline",
       "configurePreset": "all-offline",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "gnss-offline",
+      "configurePreset": "gnss-offline",
       "output": {
         "outputOnFailure": true
       }
