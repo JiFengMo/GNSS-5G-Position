@@ -6,9 +6,9 @@
 using namespace b1live;
 static void check(bool v,const char* message){if(!v)throw std::runtime_error(message);}
 static std::vector<std::string> split(const std::string& s){std::vector<std::string> out;size_t p=0;while(true){size_t n=s.find(',',p);out.push_back(s.substr(p,n==std::string::npos?n:n-p));if(n==std::string::npos)break;p=n+1;}return out;}
-static void iq_stream_test(){
-  Options o;o.prns={23};o.if_hz=20000;o.acquisition.doppler_min_hz=-250;o.acquisition.doppler_max_hz=250;
-  const size_t period=size_t(o.fs*.01),total=12*period;
+static void iq_stream_test(double fs){
+  Options o;o.fs=fs;o.prns={23};o.if_hz=20000;o.acquisition.doppler_min_hz=-250;o.acquisition.doppler_max_hz=250;
+  const size_t period=size_t(std::llround(o.fs*.01)),total=12*period;
   std::vector<int8_t> data(period),pilot(period);int8_t secondary[1800];
   check(!bds_b1c_sample_boc11(23,BDS_B1C_DATA,o.fs,data.data(),period),"Data replica");
   check(!bds_b1c_sample_boc11(23,BDS_B1C_PILOT,o.fs,pilot.data(),period),"Pilot replica");
@@ -23,7 +23,11 @@ static void iq_stream_test(){
   std::vector<std::string> reference;
   for(size_t chunk:{size_t(777),size_t(65536)}){
     std::vector<std::string> epochs;unsigned captures=0;Engine e(o,[&](const char* kind,const Object& d){
-      if(std::string(kind)=="tracking")epochs.push_back(Json(d).dump());
+      if(std::string(kind)=="tracking"){
+        epochs.push_back(Json(d).dump());
+        uint64_t first=std::stoull(d.at("absolute_sample").dump().substr(1));
+        check(std::abs(std::stod(d.at("time_s").dump())-first/fs)<1e-14,"Tracking time must retain actual hardware rate");
+      }
       if(std::string(kind)=="acquisition"&&d.at("acquired").dump()=="1")++captures;
     });
     for(size_t n=0;n<total;n+=chunk){Block b;b.first=n;size_t count=std::min(chunk,total-n);b.iq.assign(iq.begin()+n,iq.begin()+n+count);e.push(b);}
@@ -63,6 +67,9 @@ int main(int argc,char** argv){try{
   rejected=false;a.first=3;try{engine.push(a);}catch(const std::runtime_error&){rejected=true;}check(rejected,"Backward input must be rejected");
   Engine zero(o,[&](const char* kind,const Object&){positions+=std::string(kind)=="position";});
   a.first=0;a.iq.assign(size_t(o.fs*.02),{});zero.push(a);check(!zero.active&&positions==0,"Zero IQ cannot produce lock/coordinates");
-  iq_stream_test();
+  for(double fs:{4092000.,4092000.0037,4091999.9963,4092000.75})iq_stream_test(fs);
+  bad.fs=4092020;bad.period_ms=200;rejected=false;
+  try{Engine e(bad,[](const char*,const Object&){});}catch(const std::invalid_argument&){rejected=true;}
+  check(rejected,"Substantially noninteger acquisition periods must still be rejected");
   std::cout<<"PASS: bounded queue, counter/JSON encoding, gaps, invalid settings and zero IQ\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

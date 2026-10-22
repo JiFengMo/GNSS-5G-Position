@@ -64,7 +64,8 @@ struct Engine::Impl {
   int base_week=0;bool have_xyz=false;double xyz[3]={0,0,0};
   Impl(Engine* e,Options opts,Emit cb):outer(e),o(std::move(opts)),emit(std::move(cb)){
     if(!std::isfinite(o.fs)||o.fs<2046000||o.fs>1e8||!std::isfinite(o.period_ms)||o.period_ms<=0||o.period_ms>10000||
-       std::abs(o.fs*o.period_ms/1000-std::round(o.fs*o.period_ms/1000))>1e-5||o.fs*o.period_ms/1000<1||o.prns.empty())throw std::invalid_argument("Invalid live engine rate/period/PRNs");
+       o.fs*o.period_ms/1000<1||o.prns.empty())throw std::invalid_argument("Invalid live engine rate/period/PRNs");
+    if(std::abs(o.fs*.01-std::round(o.fs*.01))>.01)throw std::invalid_argument("Live RX rate exceeds .01 sample/code-period tolerance");
     auto prns=o.prns;std::sort(prns.begin(),prns.end());
     if(prns.front()<1||prns.back()>63||std::adjacent_find(prns.begin(),prns.end())!=prns.end())throw std::invalid_argument("Invalid live PRNs");
     o.acquisition.sample_rate_hz=o.fs;o.acquisition.if_hz=o.if_hz;
@@ -156,6 +157,7 @@ struct Engine::Impl {
       available=std::max(available,ch.anchor.end_sample);++ready;
     }
     if(ready<4||target==UINT64_MAX)return;
+    // Schedule on the nearest hardware sample; all time conversion retains fs.
     uint64_t step=uint64_t(std::llround(o.fs*o.period_ms/1000));
     if(!next_fix){base_week=week_candidate;uint64_t base=first+1;next_fix=base+(available>base?(available-base+step-1)/step:0)*step;}
     if(next_fix<available)next_fix+=(available-next_fix+step-1)/step*step;

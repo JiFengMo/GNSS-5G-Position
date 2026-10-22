@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory() as tmp:
     def command(name,args):
         return [mock,'--device-args',args,'--output-dir',str(root/name),'--run-id',name,
                 '--prns','23','--doppler-min','0','--doppler-max','0','--queue-seconds','.1']
-    p=subprocess.Popen(command('normal','mock'),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+    p=subprocess.Popen(command('normal','fractional'),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     try:
         deadline=time.monotonic()+10
         while time.monotonic()<deadline:
@@ -54,12 +54,19 @@ with tempfile.TemporaryDirectory() as tmp:
     finally:
         p.terminate();out,err=p.communicate(timeout=10)
     assert p.returncode==0,(p.returncode,err)
+    assert 'actual=4092000.003' in err,err
     events=[json.loads(s) for f in (root/'normal').glob('*.jsonl') for s in f.read_text().splitlines()]
     assert any(e['kind']=='hardware_origin' and int(e['data']['hardware_sample'])>2**53 for e in events)
     assert any(e['kind']=='runtime' and int(e['data'].get('rx_overflows','0'))>0 for e in events)
     assert events[-1]['kind']=='runtime' and not events[-1]['data']['running']
+    config=next(e['data'] for e in events if e['kind']=='config')
+    assert config['sample_rate_hz']==4092000.0037
+    assert config['device']['requested_sample_rate_hz']==4092000
     result=subprocess.run(command('backwards','backward'),capture_output=True,text=True,timeout=10)
     assert result.returncode!=0 and 'backwards' in result.stderr,result.stderr
     result=subprocess.run(command('missing','mock')+['--serial','missing'],capture_output=True,text=True,timeout=10)
     assert result.returncode!=0 and not (root/'missing').exists()
+    result=subprocess.run(command('bad-rate','bad-rate'),capture_output=True,text=True,timeout=10)
+    assert result.returncode!=0 and 'actual=4092020' in result.stderr and 'tolerance' in result.stderr,result.stderr
+    assert not (root/'bad-rate').exists()
     print('PASS: test-only transport exercises hardware counters, overflow/gap handling, receiver shutdown and missing-device failure')

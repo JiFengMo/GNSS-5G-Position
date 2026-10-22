@@ -71,6 +71,9 @@ void bds_b1c_acquisition_defaults(bds_b1c_acquisition_options_t *options);
  * fine search uses a contiguous 10 ms block beginning at the acquired phase.
  * Phase is zero-based within one 10 ms period; it is not absolute TOA.
  * cn0_db_hz is NaN: the acquisition statistic is not a calibrated C/N0.
+ * Hardware rate quantization is accepted within .01 sample per 10 ms
+ * of an integer period (1 Hz from a 100 Hz grid). FFT lengths are rounded;
+ * mixing/replica generation still use the supplied, unrounded rate.
  * Returns 0 (also on no detections), -1 invalid input/options, -2 allocation
  * or FFT planning failure. FFTW planning calls must be externally serialized. */
 int bds_b1c_acquire_many(const bds5g_cf32_t *samples, size_t sample_count,

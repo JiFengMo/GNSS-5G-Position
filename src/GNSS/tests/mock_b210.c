@@ -10,7 +10,8 @@ int b1_radio_open(const b1_radio_options_t* o,b1_radio_info_t* info,b1_radio_t**
   if(strstr(o->args,"missing")){snprintf(err,size,"No matching serial");return -1;}
   b1_radio_t* r=calloc(1,sizeof(*r));if(!r)return -1;r->fs=o->sample_rate;r->mode=strstr(o->args,"backward")?1:0;
   memset(info,0,sizeof(*info));snprintf(info->address,sizeof(info->address),"test-only-mock");snprintf(info->antenna,sizeof(info->antenna),"RX2");
-  info->sample_rate=o->sample_rate;info->frequency=o->frequency;info->reference_locked=info->pps_detected=1;*out=r;return 0;
+  info->sample_rate=o->sample_rate+(strstr(o->args,"bad-rate")?20:strstr(o->args,"fractional")?.0037:0);
+  r->fs=info->sample_rate;info->frequency=o->frequency;info->reference_locked=info->pps_detected=1;*out=r;return 0;
 }
 int b1_radio_start(b1_radio_t* r){(void)r;return 0;}
 int b1_radio_receive(b1_radio_t* r,bds5g_cf32_t* iq,size_t n,b1_radio_packet_t* p){

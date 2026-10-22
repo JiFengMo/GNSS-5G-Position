@@ -59,15 +59,17 @@ int main(int argc,char** argv){
     if(b1_radio_open(&radio_options,&info,&raw,&interrupted,error,sizeof(error)))throw std::runtime_error(error);
     std::unique_ptr<b1_radio_t,decltype(&b1_radio_close)> radio(raw,b1_radio_close);
     options.fs=info.sample_rate;
+    std::cerr<<std::setprecision(17)<<"BDS RX rate: requested="<<radio_options.sample_rate<<" Hz, actual="<<options.fs
+             <<" Hz, samples_per_10ms="<<options.fs*.01<<"\n";
     if(!std::isfinite(options.fs)||options.fs<2046000||options.fs>1e8||options.fs*queue_s*8>2.0*1024*1024*1024)throw std::runtime_error("Actual RX sample rate/queue exceeds supported limits");
-    if(std::abs(options.fs*.01-std::round(options.fs*.01))>1e-5)throw std::runtime_error("Actual RX rate has a noninteger 10 ms code period");
+    if(std::abs(options.fs*.01-std::round(options.fs*.01))>.01)throw std::runtime_error("Actual RX rate exceeds .01 sample/10ms tolerance (1 Hz from a 100 Hz rate grid); see precise actual rate above");
     options.if_hz=options.rf_hz-info.frequency;
     Json reference=info.reference_locked<0?Json():Json(bool(info.reference_locked));
     Array prns;for(int p:options.prns)prns.push_back(p);
     Object run={{"schema",1},{"kind","b1c_live"},{"run_id",id},{"name",id},{"sample_rate_hz",options.fs},{"prns",prns},{"offline_retrospective",false},
       {"tracking",Object{{"if_hz",options.if_hz},{"pll_bandwidth_hz",options.tracking.pll_bandwidth_hz},{"dll_bandwidth_hz",options.tracking.dll_bandwidth_hz},{"early_late_offset_chips",options.tracking.early_late_offset_chips},{"quality_epochs",options.tracking.quality_epochs}}},
       {"navigation",Object{{"ldpc_error_correction",false}}},{"positioning",Object{{"period_ms",options.period_ms},{"elevation_mask_deg",options.elevation},{"troposphere",options.tropo}}},
-      {"device",Object{{"args",info.address},{"requested_args",device},{"rf_hz",options.rf_hz},{"tuned_hz",info.frequency},{"gain_db",info.gain},{"bandwidth_hz",info.bandwidth},{"antenna",info.antenna},{"clock_source",clock},{"time_source",time},{"reference_locked",reference},{"pps_detected",bool(info.pps_detected)}}}};
+      {"device",Object{{"args",info.address},{"requested_args",device},{"requested_sample_rate_hz",radio_options.sample_rate},{"samples_per_code",options.fs*.01},{"rf_hz",options.rf_hz},{"tuned_hz",info.frequency},{"gain_db",info.gain},{"bandwidth_hz",info.bandwidth},{"antenna",info.antenna},{"clock_source",clock},{"time_source",time},{"reference_locked",reference},{"pps_detected",bool(info.pps_detected)}}}};
     Log log(directory,id,run);Queue queue(size_t(options.fs*queue_s));
     Engine engine(options,[&](const char* kind,const Object& data){log.emit(kind,data);});
     std::atomic<bool> stop{false},failed{false};std::atomic<uint64_t> received{0},latest{0},overflows{0},timeouts{0},gaps{0};

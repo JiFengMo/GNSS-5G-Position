@@ -41,7 +41,11 @@ static int valid_options(const bds_b1c_acquisition_options_t *o)
   if (!isfinite(bins) || bins > 20000 || fabs(bins - round(bins)) > 1e-7 ||
       !isfinite(fine) || fine < 1 || fine > 1000 || fabs(fine - round(fine)) > 1e-7)
     return 0;
-  if (fabs(o->sample_rate_hz * .01 - round(o->sample_rate_hz * .01)) > 1e-6) return 0;
+  /* A B210's fractional-N clock can return a sub-Hz rate difference.
+   * Round only the finite FFT/code buffer length, never the rate used for
+   * mixing, replicas or downstream tracking/time. Bound this approximation
+   * to .01 sample per code period (1 Hz from the nearest 100 Hz grid). */
+  if (fabs(o->sample_rate_hz * .01 - round(o->sample_rate_hz * .01)) > .01) return 0;
   return fabs(o->if_hz + o->doppler_min_hz) + o->doppler_step_hz < o->sample_rate_hz / 2 &&
          fabs(o->if_hz + o->doppler_max_hz) + o->doppler_step_hz < o->sample_rate_hz / 2;
 }
