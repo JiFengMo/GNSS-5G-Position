@@ -30,6 +30,7 @@ int b1_radio_open(const b1_radio_options_t* o,b1_radio_info_t* info,b1_radio_t**
   CALL(uhd_string_vector_make(&devices));CALL(uhd_usrp_find(o->args,&devices));CALL(uhd_string_vector_size(devices,&count));
   if(!count){snprintf(radio_error,sizeof(radio_error),"No connected B210 matches device_args/serial; no fallback device selected");goto fail;}
   CALL(uhd_string_vector_at(devices,0,info->address,sizeof(info->address)));
+  fprintf(stderr,"BDS selected device: %s; clock_source=%s; time_source=%s\n",info->address,o->clock_source,o->time_source);
   /* Keep transport hints, while pinning the discovered first/matching radio. */
   char make_args[2048];
   if(snprintf(make_args,sizeof(make_args),"%s,%s",o->args,info->address)>=(int)sizeof(make_args)){snprintf(radio_error,sizeof(radio_error),"UHD device arguments too long");goto fail;}
@@ -52,13 +53,13 @@ int b1_radio_open(const b1_radio_options_t* o,b1_radio_info_t* info,b1_radio_t**
     CALL(uhd_sensor_value_make(&r->sensor));bool locked=false;
     for(int j=0;j<30&&!*stop;++j){CALL(uhd_usrp_get_mboard_sensor(r->usrp,"ref_locked",0,&r->sensor));CALL(uhd_sensor_value_to_bool(r->sensor,&locked));if(locked)break;usleep(100000);}
     info->reference_locked=locked;
-    if(r->external_reference&&!locked){snprintf(radio_error,sizeof(radio_error),"External 10 MHz reference did not lock");goto fail;}
+    if(r->external_reference&&!locked){snprintf(radio_error,sizeof(radio_error),"[BDS_REF_UNLOCKED] External 10 MHz reference did not lock (clock_source=external, ref_locked=false, wait=3s)");goto fail;}
   }
   if(r->external_pps){
     int64_t before,now;double before_frac,now_frac;
     CALL(uhd_usrp_get_time_last_pps(r->usrp,0,&before,&before_frac));
     for(int j=0;j<25&&!*stop;++j){usleep(100000);CALL(uhd_usrp_get_time_last_pps(r->usrp,0,&now,&now_frac));if(now!=before||now_frac!=before_frac){info->pps_detected=1;break;}}
-    if(!info->pps_detected){snprintf(radio_error,sizeof(radio_error),"External PPS not detected");goto fail;}
+    if(!info->pps_detected){snprintf(radio_error,sizeof(radio_error),"[BDS_PPS_MISSING] External PPS not detected (time_source=external, wait=2.5s)");goto fail;}
     CALL(uhd_usrp_set_time_unknown_pps(r->usrp,0,0));
   }else CALL(uhd_usrp_set_time_now(r->usrp,0,0,0));
   if(*stop){snprintf(radio_error,sizeof(radio_error),"Receiver startup interrupted");goto fail;}

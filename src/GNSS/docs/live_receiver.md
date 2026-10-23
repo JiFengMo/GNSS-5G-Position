@@ -35,6 +35,14 @@ sh run_BDS_only.sh
 
 界面展示边界、离线入口和回看方法见 [北斗 UI](../../../ui/gnss.md)。日志轮换和历史缓存有界，但实采记录尚不能直接导入离线 SQLite 回看；不声称保留完整实验历史或支持原始 IQ 重算。
 
+## 启动失败提示
+
+启动前会打印实际加载的设备配置绝对路径，以及 clock_source、time_source 和 serial 的值。失败时终端显示中文原因、失败阶段与退出码、配置路径、当前加载值、关键原始错误、处理办法和完整日志位置，不再用整条 Python 子进程命令代替原因。UHD 初始化原文完整保留在 receiver.log，不在失败时整段重复输出。
+
+可识别的诊断包括 REF_UNLOCKED（外部参考未锁定）、REF_LOST（运行中参考失锁）、PPS_MISSING/PPS_LOST（PPS 未检测或停止）、DEVICE_NOT_FOUND（未找到符合参数的设备）、RATE_UNSUPPORTED（实际速率/队列超限）、RX_TIMEOUT（持续接收超时）及 TIME_BACKWARDS（时间戳倒退）。未知错误使用 PROCESS_EXIT，保留原始错误和日志路径，不猜测硬件原因。英文原始错误仅作为诊断证据。
+
+REF_UNLOCKED 表示“配置要求 external，但设备未报告锁定”，不等于程序能判断物理线缆未连接。没有外部 10 MHz/PPS 时需将相应来源改为 internal，保存后重启；程序不会自动修改配置或悄悄回退内部参考。
+
 ## 当前验证与目标机验收
 
 2026-10-22 在 WSL Ubuntu、GCC 13、UHD 4.6.0.0 环境编译并链接真实后端。新增检查覆盖有界队列、采样间断、零 IQ 不产生坐标、原有 MATLAB 参考帧进入在线解码与因果解算；测试专用接收替身覆盖大于 2^53 的硬件计数、overflow、倒退时间、设备不存在与退出清理。替身只链接到 `test_b1c_live_transport`，生产 `bds-b1c-live` 链接真实 UHD，不含模拟输入回退。

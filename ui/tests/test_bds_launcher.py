@@ -1,4 +1,6 @@
 import importlib
+import io
+from contextlib import redirect_stderr,redirect_stdout
 from pathlib import Path
 import subprocess
 import sys
@@ -83,6 +85,38 @@ class BDSLauncherTests(unittest.TestCase):
         with patch.object(launch_bds.subprocess,'Popen',side_effect=[ui,rx]),patch.object(launch_bds,'urlopen',return_value=response),self.assertRaises(subprocess.CalledProcessError):
             launch_bds.supervise_live(['test-only'],['test-only-ui'],self.root,18766)
         ui.terminate.assert_called_once();rx.terminate.assert_not_called()
+
+    def test_clock_error_explains_loaded_values_config_and_recovery(self):
+        log=self.root/'receiver.log'
+        raw='BDS live receiver: [BDS_REF_UNLOCKED] External 10 MHz reference did not lock (clock_source=external, ref_locked=false, wait=3s)'
+        log.write_text('[INFO] [UHD] lots of startup noise\nBDS selected device: serial=example\n'+raw+'\n',encoding='utf-8')
+        job=dict(clock_source='external',time_source='external',serial='')
+        error=launch_bds.process_error('USRP 接收与处理',['receiver','--many','arguments'],2,log,self.config,job)
+        text=str(error)
+        for expected in ('[REF_UNLOCKED]','未报告锁定','clock_source = external','time_source = external',str(self.config.resolve()),'internal','serial=example',str(log),raw):self.assertIn(expected,text)
+        self.assertNotIn('[INFO]',text);self.assertNotIn('--many',text)
+        self.assertEqual(error.returncode,2);self.assertEqual(log.read_text(encoding='utf-8').splitlines()[-1],raw)
+
+    def test_other_receiver_errors_have_distinct_guidance_and_unknowns_keep_evidence(self):
+        log=self.root/'receiver.log'
+        for raw,tag in [('External PPS not detected','PPS_MISSING'),('No connected B210 matches device_args/serial','DEVICE_NOT_FOUND'),
+                        ('External 10 MHz reference lost lock','REF_LOST'),('External PPS stopped','PPS_LOST'),
+                        ('BDS RX timed out for 6 seconds','RX_TIMEOUT'),('RX hardware time moved backwards','TIME_BACKWARDS'),
+                        ('Actual RX rate exceeds .01 sample/10ms tolerance','RATE_UNSUPPORTED'),('unexpected diagnostic 123','PROCESS_EXIT')]:
+            with self.subTest(tag=tag):
+                log.write_text('BDS RX rate: requested=4092000 actual=4092020\n'+raw+'\n',encoding='utf-8')
+                text=str(launch_bds.process_error('USRP',['receiver'],3,log))
+                self.assertIn('['+tag+']',text);self.assertIn(raw,text);self.assertIn('actual=4092020',text);self.assertIn('完整日志',text)
+
+    def test_main_preserves_exit_code_without_dumping_python_command(self):
+        log=self.root/'receiver.log';log.write_text('External PPS not detected\n',encoding='utf-8')
+        error=launch_bds.process_error('USRP',['receiver','--long-command'],2,log)
+        probe=MagicMock();probe.__enter__.return_value=probe;probe.connect_ex.return_value=1
+        stderr=io.StringIO()
+        with patch.object(sys,'argv',['launch_bds.py','--ui-only','--config',str(self.config)]),patch.object(launch_bds.socket,'socket',return_value=probe), \
+             patch.object(launch_bds.signal,'signal'),patch.object(launch_bds,'run_child',side_effect=error),redirect_stderr(stderr),redirect_stdout(io.StringIO()):
+            self.assertEqual(launch_bds.main(),2)
+        self.assertIn('[PPS_MISSING]',stderr.getvalue());self.assertNotIn('--long-command',stderr.getvalue())
 
     def test_occupied_port_is_rejected_without_temporary_bind(self):
         probe=MagicMock();probe.__enter__.return_value=probe;probe.connect_ex.return_value=0

@@ -28,6 +28,55 @@ from server import ROOT,load_settings,read_config
 JOB_KEYS={"input_file","input_format","sample_rate_hz","if_hz","seconds","prns","ui_port"}
 
 
+class BDSProcessError(subprocess.CalledProcessError):
+    """Keep the exit status for callers without dumping the entire command."""
+    def __init__(self,code,command,message):
+        super().__init__(code,command);self.message=message
+    def __str__(self):return self.message
+
+
+def process_error(stage,command,code,log_path,config_path=None,job=None):
+    try:
+        with log_path.open(encoding='utf-8',errors='replace') as source:tail=''.join(deque(source,maxlen=80))
+    except OSError:tail=''
+    issues=[
+        (('BDS_REF_UNLOCKED','External 10 MHz reference did not lock'), 'REF_UNLOCKED',
+         '配置要求外部 10 MHz 参考，但设备在等待期间未报告锁定。',
+         '如果没有接外部参考：将 clock_source 改为 internal；如果也没有接外部 PPS，将 time_source 一并改为 internal。\n如果需要外部同步：检查所选设备的 10 MHz 输入、参考源输出及连接，再重新启动。'),
+        (('BDS_REF_LOST','External 10 MHz reference lost lock'), 'REF_LOST',
+         '采样过程中，外部 10 MHz 参考失去锁定。', '检查参考源输出和线缆连接，恢复后重新启动。'),
+        (('BDS_PPS_MISSING','External PPS not detected'), 'PPS_MISSING',
+         '配置要求外部 PPS，但启动时未检测到 PPS 跳变。',
+         '未接外部 PPS 时，将 time_source 改为 internal；已接入时，检查 PPS 输出与设备 PPS 接口。'),
+        (('BDS_PPS_LOST','External PPS stopped'), 'PPS_LOST',
+         '采样过程中，外部 PPS 停止更新。', '检查 PPS 源和线缆，恢复后重新启动。'),
+        (('BDS_DEVICE_NOT_FOUND','No connected B210 matches','No matching serial'), 'DEVICE_NOT_FOUND',
+         '没有发现符合 device_args / serial 的可用 B210。',
+         '运行 uhd_find_devices 核对设备与序列号；检查 USB、供电，以及设备是否被其他程序占用。填写 serial 后不会回退选择其他设备。'),
+        (('BDS_RATE_UNSUPPORTED','Actual RX rate exceeds','noninteger 10 ms code period','Actual RX sample rate/queue'), 'RATE_UNSUPPORTED',
+         'UHD 回读的实际采样率或对应队列大小超出当前接收链路支持范围。',
+         '核对下方 BDS RX rate 的请求值和实际值，以及 sample_rate_hz、master_clock_rate_hz、queue_seconds。若仍异常，请提供这几行和完整接收日志。'),
+        (('BDS_RX_TIMEOUT','BDS RX timed out'), 'RX_TIMEOUT',
+         '接收流连续超时，未能持续收到 IQ 数据。', '检查 USB 连接、供电及 UHD 原始错误；确认设备未断开后重新启动。'),
+        (('RX hardware time moved backwards',), 'TIME_BACKWARDS',
+         '接收硬件时间戳发生倒退，当前采样不能视为连续数据。', '检查设备时钟/复位及是否有其他程序控制设备，再重新启动。'),
+    ]
+    tag='PROCESS_EXIT';reason=f'{stage}异常退出（退出码 {code}），现有日志尚不能明确定位原因。'
+    action='查看下方完整日志；请提供末尾的原始错误，进一步定位。'
+    for markers,tag_value,reason_value,action_value in issues:
+        if any(marker in tail for marker in markers):tag,reason,action=tag_value,reason_value,action_value;break
+    lines=[f'[{tag}] {reason}',f'失败阶段：{stage}（退出码 {code}）']
+    if config_path:lines.append('配置文件：'+str(Path(config_path).resolve()))
+    if job:
+        lines.append(f"本次加载值：clock_source = {job['clock_source']}；time_source = {job['time_source']}；serial = {job['serial'] or '留空（默认发现设备）'}")
+    # Show useful numerical/device evidence, not the surrounding UHD banner.
+    evidence=[line for line in tail.splitlines() if line.startswith(('BDS selected device:','BDS RX rate:'))]
+    errors=[line for line in tail.splitlines() if line.strip()]
+    if errors:lines.append('原始错误：'+errors[-1][:1000])
+    lines.extend(evidence[-2:]);lines.extend(['处理办法：'+action,'完整日志：'+str(log_path)])
+    return BDSProcessError(code or 1,command,'\n'.join(lines))
+
+
 def radio_settings(path):
     job=read_config(path,allow_empty_keys={'serial'})
     keys={'device','device_args','serial','center_frequency_hz','sample_rate_hz','bandwidth_hz','gain_db','clock_source','time_source',
@@ -36,7 +85,8 @@ def radio_settings(path):
           'dll_bandwidth_hz','pll_bandwidth_hz','early_late_chips','position_period_ms','elevation_mask_deg'}
     if set(job)!=keys:raise ValueError(f'Unknown/missing BDS radio settings: {sorted(set(job)^keys)}')
     if job['device']!='usrp_b210' or job['signal']!='BDS_B1C':raise ValueError('Only B210 / BDS_B1C is supported')
-    if job['clock_source'] not in ('internal','external') or job['time_source'] not in ('internal','external'):raise ValueError('Invalid BDS clock source')
+    for key in ('clock_source','time_source'):
+        if job[key] not in ('internal','external'):raise ValueError(f'{key} = {job[key]!r} 无效；可选 internal（内部来源）或 external（外部来源）')
     if not job['device_args'] or not job['rx_antenna']:raise ValueError('BDS device and antenna must be selected')
     if job['serial'] and not re.fullmatch(r'[A-Za-z0-9_-]+',job['serial']):raise ValueError('Invalid B210 serial')
     if any(p.strip().split('=',1)[0]=='serial' for p in job['device_args'].split(',')):
@@ -79,7 +129,7 @@ def radio_command(job,identifier):
     return list(map(str,command))
 
 
-def supervise_live(command,ui,logs,port):
+def supervise_live(command,ui,logs,port,config_path=None,job=None):
     children=[];outputs=[]
     try:
         for name,args in [('ui',ui),('receiver',command)]:
@@ -88,20 +138,19 @@ def supervise_live(command,ui,logs,port):
             if name=='ui':
                 deadline=time.monotonic()+10
                 while True:
-                    if child.poll() is not None:raise RuntimeError('北斗 UI 启动失败；查看 '+str(logs/'ui.log'))
+                    if child.poll() is not None:raise process_error('北斗网页服务启动',child.args,child.returncode,logs/'ui.log',config_path,job)
                     try:
                         with urlopen(f'http://127.0.0.1:{port}/api/bootstrap',timeout=.5) as response:
                             if response.status==200:break
                     except OSError:pass
-                    if time.monotonic()>deadline:raise RuntimeError('北斗 UI 启动超时')
+                    if time.monotonic()>deadline:raise RuntimeError('北斗网页服务 10 秒内未就绪；检查端口与完整日志：'+str(logs/'ui.log'))
                     time.sleep(.1)
         while True:
             for name,child in zip(('UI','USRP'),children):
                 code=child.poll()
                 if code is not None:
                     path=logs/('ui.log' if name=='UI' else 'receiver.log')
-                    with path.open(encoding='utf-8',errors='replace') as source:print(''.join(deque(source,maxlen=25)),file=sys.stderr)
-                    if code:raise subprocess.CalledProcessError(code,child.args)
+                    if code:raise process_error('USRP 接收与处理' if name=='USRP' else '北斗网页服务',child.args,code,path,config_path,job)
                     return
             time.sleep(.2)
     finally:
@@ -163,10 +212,9 @@ def run_child(command,log_path=None):
     finally:
         if output:output.close()
     if status:
-        if log_path:
-            with log_path.open(encoding="utf-8",errors="replace") as source:
-                print("".join(deque(source,maxlen=20)),file=sys.stderr)
-        raise subprocess.CalledProcessError(status,command)
+        stage='编译' if '--build' in command else '构建配置' if '--preset' in command else Path(str(command[0])).name
+        if log_path:raise process_error(stage,command,status,log_path)
+        raise BDSProcessError(status,command,f'{stage}异常退出（退出码 {status}）；请查看上方进程输出。')
 
 
 def process_job(job,settings,identifier,run=run_child,importer=import_run):
@@ -231,11 +279,12 @@ def main():
             if args.offline:process_job(job,settings,identifier)
             else:
                 logs=ROOT/'log/launcher'/identifier;logs.mkdir(parents=True,exist_ok=False)
+                print(f"已加载北斗配置：{args.config.resolve()}\n时钟设置：clock_source = {job['clock_source']}；time_source = {job['time_source']}；serial = {job['serial'] or '留空（默认发现设备）'}",flush=True)
                 run_child(['cmake','--preset','gnss-radio'],logs/'configure.log')
                 run_child(['cmake','--build','--preset','gnss-radio','--parallel','2'],logs/'build.log')
-                print(f'北斗实采：http://127.0.0.1:{port}/；运行日志：{logs}；Ctrl+C 停止本次 USRP 和 UI',flush=True)
+                print(f'准备启动北斗实采，设备初始化中；网页地址：http://127.0.0.1:{port}/；运行日志：{logs}；Ctrl+C 停止本次 USRP 和 UI',flush=True)
                 ui=[sys.executable,'-u',ROOT/'ui/server.py','--config',args.main_config.resolve(),'--port',port,'--signal','bds','--bds-source','live']
-                supervise_live(radio_command(job,identifier),ui,logs,port)
+                supervise_live(radio_command(job,identifier),ui,logs,port,args.config,job)
                 return 0
         print(f"北斗 UI：http://127.0.0.1:{port}/；按 Ctrl+C 停止本次服务。",flush=True)
         run_child([sys.executable,"-u",ROOT/"ui/server.py","--config",args.main_config.resolve(),"--port",port,"--signal","bds"])
@@ -244,7 +293,9 @@ def main():
         print("\n北斗任务已停止；已生成的结果与日志保留。",file=sys.stderr)
         return 130
     except (OSError,ValueError,KeyError,RuntimeError,subprocess.CalledProcessError) as exc:
-        print(f"北斗启动失败：{exc}",file=sys.stderr)
+        detail=str(exc) if not isinstance(exc,subprocess.CalledProcessError) or isinstance(exc,BDSProcessError) else f'{Path(str(exc.cmd[0])).name}异常退出（退出码 {exc.returncode}）；请查看该阶段日志。'
+        if not isinstance(exc,BDSProcessError):detail+='\n配置文件：'+str((args.config or args.main_config).resolve())
+        print(f"北斗任务失败：\n{detail}",file=sys.stderr)
         return exc.returncode if isinstance(exc,subprocess.CalledProcessError) and exc.returncode>0 else 1
 
 

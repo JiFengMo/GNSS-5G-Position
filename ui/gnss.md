@@ -114,7 +114,7 @@ cmake --build --preset all-offline --parallel 2
 ctest --preset all-offline
 ```
 
-预期 30 个 Python 用例和 21 项 all-offline CTest 通过。实时 reader 每次最多读取 4 MiB，单行最多 256 KiB，每星最多保留 12000 跟踪历元和 256 帧、定位历史 800 项、事件 240 项；不会把跳过的记录跨段连线。当前实采 JSONL 用于滚动监看与诊断，尚未提供完整历史导入回看或 IQ 重算。多次实验目录总占用需人工管理。
+预期 33 个 Python 用例和 21 项 all-offline CTest 通过。实时 reader 每次最多读取 4 MiB，单行最多 256 KiB，每星最多保留 12000 跟踪历元和 256 帧、定位历史 800 项、事件 240 项；不会把跳过的记录跨段连线。当前实采 JSONL 用于滚动监看与诊断，尚未提供完整历史导入回看或 IQ 重算。多次实验目录总占用需人工管理。
 
 已准备上述完整参考实验并启动 UI 服务时，可按 [UI 检查说明](README.md#检查) 配置开发专用 Playwright 依赖，然后执行：
 
