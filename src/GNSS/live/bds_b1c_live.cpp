@@ -34,6 +34,8 @@ int main(int argc,char** argv){
     std::string directory=text("--output-dir",""),id=text("--run-id",""),list=text("--prns","1-63");
     if(directory.empty()||id.empty())throw std::runtime_error("--output-dir and --run-id required");
     Options options;options.fs=number("--sample-rate",4092000);options.rf_hz=number("--frequency",1575420000);options.if_hz=number("--if",0);
+    auto threads=[&](const char* key){double n=number(key,1);if(n<1||n>63||n!=std::floor(n))throw std::runtime_error(std::string(key)+" must be an integer in 1..63");return unsigned(n);};
+    options.acquisition_threads=threads("--acquisition-threads");options.tracking_threads=threads("--tracking-threads");
     double bandwidth=number("--bandwidth",4000000),gain=number("--gain",42),master=number("--master-clock-rate",32736000),queue_s=number("--queue-seconds",16);
     options.acquisition.doppler_min_hz=number("--doppler-min",-8000);options.acquisition.doppler_max_hz=number("--doppler-max",8000);
     options.acquisition.doppler_step_hz=number("--doppler-step",250);options.acquisition.fine_step_hz=number("--fine-step",25);
@@ -67,6 +69,7 @@ int main(int argc,char** argv){
     Json reference=info.reference_locked<0?Json():Json(bool(info.reference_locked));
     Array prns;for(int p:options.prns)prns.push_back(p);
     Object run={{"schema",1},{"kind","b1c_live"},{"run_id",id},{"name",id},{"sample_rate_hz",options.fs},{"prns",prns},{"offline_retrospective",false},
+      {"performance",Object{{"acquisition_threads",options.acquisition_threads},{"tracking_threads",options.tracking_threads},{"code_spectrum_cache",false}}},
       {"tracking",Object{{"if_hz",options.if_hz},{"pll_bandwidth_hz",options.tracking.pll_bandwidth_hz},{"dll_bandwidth_hz",options.tracking.dll_bandwidth_hz},{"early_late_offset_chips",options.tracking.early_late_offset_chips},{"quality_epochs",options.tracking.quality_epochs}}},
       {"navigation",Object{{"ldpc_error_correction",false}}},{"positioning",Object{{"period_ms",options.period_ms},{"elevation_mask_deg",options.elevation},{"troposphere",options.tropo}}},
       {"device",Object{{"args",info.address},{"requested_args",device},{"requested_sample_rate_hz",radio_options.sample_rate},{"samples_per_code",options.fs*.01},{"rf_hz",options.rf_hz},{"tuned_hz",info.frequency},{"gain_db",info.gain},{"bandwidth_hz",info.bandwidth},{"antenna",info.antenna},{"clock_source",clock},{"time_source",time},{"reference_locked",reference},{"pps_detected",bool(info.pps_detected)}}}};

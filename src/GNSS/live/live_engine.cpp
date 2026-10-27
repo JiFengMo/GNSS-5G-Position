@@ -9,7 +9,9 @@ void Queue::push(Block b){
   std::lock_guard<std::mutex> lock(mutex_);if(closed_)return;
   if(b.iq.size()>capacity_){dropped_samples+=b.iq.size();++overruns;return;}
   if(samples_+b.iq.size()>capacity_){dropped_samples+=samples_;++overruns;blocks_.clear();samples_=0;}
-  samples_+=b.iq.size();blocks_.push_back(std::move(b));cv_.notify_one();
+  samples_+=b.iq.size();blocks_.push_back(std::move(b));
+  if(samples_>peak_samples.load())peak_samples=samples_;
+  cv_.notify_one();
 }
 bool Queue::pop(Block& b){std::unique_lock<std::mutex> lock(mutex_);cv_.wait(lock,[&]{return closed_||!blocks_.empty();});if(blocks_.empty())return false;b=std::move(blocks_.front());samples_-=b.iq.size();blocks_.pop_front();return true;}
 void Queue::close(){std::lock_guard<std::mutex> lock(mutex_);closed_=true;cv_.notify_all();}
@@ -55,9 +57,13 @@ struct Engine::Impl {
     Impl* owner=nullptr;int prn=0;bds_b1c_tracker_t* tracker=nullptr;bds_b1c_navigator_t* nav=nullptr;
     std::deque<bds_b1c_tracking_epoch_t> rows; bds_b1c_nav_frame_t anchor{};
     bool anchored=false,seen=false,reacquire=false;uint64_t generation=0,segment=0;
+    std::vector<bds_b1c_tracking_epoch_t> pending_epochs;
+    bool collect_failed=false;
     ~Channel(){bds_b1c_tracker_destroy(tracker);bds_b1c_navigator_destroy(nav);}
   };
   Engine* outer;Options o;Emit emit;Channel c[63];
+  std::unique_ptr<bds_b1c_worker_pool_t,decltype(&bds_b1c_worker_pool_destroy)>
+    tracking_pool{nullptr,bds_b1c_worker_pool_destroy};
   uint64_t expected=0,search_start=0,retry_at=0,survey_at=0;bool have_expected=false;
   std::vector<bds5g_cf32_t> search;std::vector<int> pending;bool initial=true;
   uint64_t next_fix=0,last_fix=0,index=0;double local=std::numeric_limits<double>::quiet_NaN();
@@ -65,11 +71,17 @@ struct Engine::Impl {
   Impl(Engine* e,Options opts,Emit cb):outer(e),o(std::move(opts)),emit(std::move(cb)){
     if(!std::isfinite(o.fs)||o.fs<2046000||o.fs>1e8||!std::isfinite(o.period_ms)||o.period_ms<=0||o.period_ms>10000||
        o.fs*o.period_ms/1000<1||o.prns.empty())throw std::invalid_argument("Invalid live engine rate/period/PRNs");
+    if(!o.acquisition_threads||o.acquisition_threads>63||!o.tracking_threads||o.tracking_threads>63)
+      throw std::invalid_argument("Acquisition/tracking threads must be integers in 1..63");
     if(std::abs(o.fs*.01-std::round(o.fs*.01))>.01)throw std::invalid_argument("Live RX rate exceeds .01 sample/code-period tolerance");
     auto prns=o.prns;std::sort(prns.begin(),prns.end());
     if(prns.front()<1||prns.back()>63||std::adjacent_find(prns.begin(),prns.end())!=prns.end())throw std::invalid_argument("Invalid live PRNs");
     o.acquisition.sample_rate_hz=o.fs;o.acquisition.if_hz=o.if_hz;
     o.tracking.sample_rate_hz=o.fs;o.tracking.if_hz=o.if_hz;o.tracking.carrier_rf_hz=o.rf_hz;
+    bds_b1c_worker_pool_t* pool=nullptr;
+    if(bds_b1c_worker_pool_create(std::min(o.tracking_threads,unsigned(o.prns.size())),&pool))
+      throw std::runtime_error("Cannot create tracking worker pool");
+    tracking_pool.reset(pool);
     for(int j=0;j<63;++j){c[j].owner=this;c[j].prn=j+1;if(bds_b1c_navigator_create(j+1,o.fs,&c[j].nav))throw std::runtime_error("navigator create failed");}
   }
   void event(Channel& ch,uint64_t sample,const char* name){emit("event",{{"prn",ch.prn},{"generation",counter(ch.generation)},{"absolute_sample",counter(sample)},{"time_s",sample/o.fs},{"event",name}});}
@@ -86,6 +98,11 @@ struct Engine::Impl {
   static void epoch_callback(const bds_b1c_tracking_epoch_t* r,void* context){
     auto& ch=*static_cast<Channel*>(context);auto e=*r;e.generation=ch.generation;ch.owner->accept(e);
   }
+  static void collect_epoch(const bds_b1c_tracking_epoch_t* r,void* context) noexcept {
+    auto& ch=*static_cast<Channel*>(context);
+    if(ch.collect_failed)return;
+    try{ch.pending_epochs.push_back(*r);}catch(...){ch.collect_failed=true;}
+  }
   void accept(const bds_b1c_tracking_epoch_t& e){
     if(e.prn<1||e.prn>63||!e.sample_count||e.absolute_sample>UINT64_MAX-e.sample_count)throw std::runtime_error("invalid epoch");
     auto& ch=c[e.prn-1];ch.generation=e.generation;bool boundary=!ch.rows.empty()&&
@@ -98,13 +115,29 @@ struct Engine::Impl {
     if(bds_b1c_navigator_push(ch.nav,&e,frame_callback,&ch))throw std::runtime_error("navigator rejected epoch");
     if(e.state==BDS_B1C_LOST)ch.reacquire=true;
   }
-  void feed(Channel& ch,const bds5g_cf32_t* data,size_t n,uint64_t start){
+  void feed(Channel& ch,const bds5g_cf32_t* data,size_t n,uint64_t start,bool collect=false){
     if(!ch.tracker||ch.reacquire)return;
     uint64_t next=bds_b1c_tracker_next_sample(ch.tracker);
     if(next>=start+n)return;
     if(next<start)throw std::runtime_error("tracker input continuity mismatch");
     size_t offset=size_t(next-start);
-    if(bds_b1c_tracker_push(ch.tracker,data+offset,n-offset,next,epoch_callback,&ch))throw std::runtime_error("tracker rejected IQ block");
+    if(bds_b1c_tracker_push(ch.tracker,data+offset,n-offset,next,collect?collect_epoch:epoch_callback,&ch))throw std::runtime_error("tracker rejected IQ block");
+    if(ch.collect_failed)throw std::runtime_error("Cannot buffer tracking epochs");
+  }
+  void feed_all(const Block& block){
+    if(o.tracking_threads==1){for(auto& ch:c)feed(ch,block.iq.data(),block.iq.size(),block.first);return;}
+    for(auto& ch:c){ch.pending_epochs.clear();ch.collect_failed=false;}
+    struct Batch{Impl* self;const Block* block;} batch{this,&block};
+    auto task=[](size_t index,void* context){
+      auto& batch=*static_cast<Batch*>(context);auto& self=*batch.self;const auto& b=*batch.block;
+      self.feed(self.c[index],b.iq.data(),b.iq.size(),b.first,true);
+    };
+    if(bds_b1c_worker_pool_run(tracking_pool.get(),63,task,&batch))
+      throw std::runtime_error("Parallel tracking failed (IQ continuity, input or allocation)");
+    // Tracker state is private to its task. All shared navigation, generation,
+    // event/log and receiver-clock state is committed in the original order.
+    // The input block remains alive until every task has reached this barrier.
+    for(auto& ch:c)for(auto epoch:ch.pending_epochs){epoch.generation=ch.generation;accept(epoch);}
   }
   void push(const Block& block){
     if(block.iq.empty())return;
@@ -115,7 +148,7 @@ struct Engine::Impl {
     // Existing channels continue over each block while a fresh 20 ms search
     // window accumulates for lost channels. Newly acquired channels replay
     // that exact window; existing channels are never fed it twice.
-    for(auto& ch:c)feed(ch,block.iq.data(),block.iq.size(),block.first);
+    feed_all(block);
     if(pending.empty()&&block.first>=retry_at){
       if(initial)pending=o.prns;
       else for(int prn:o.prns){auto& ch=c[prn-1];if(ch.reacquire||(!ch.tracker&&block.first>=survey_at))pending.push_back(prn);}
@@ -125,7 +158,7 @@ struct Engine::Impl {
       search.insert(search.end(),block.iq.begin(),block.iq.end());
       if(search.size()>=size_t(std::llround(o.fs*.02))){
         std::vector<bds_b1c_acquisition_t> results(pending.size());
-        if(bds_b1c_acquire_many(search.data(),search.size(),&o.acquisition,pending.data(),pending.size(),results.data()))throw std::runtime_error("live acquisition failed");
+        if(bds_b1c_acquire_many_parallel(search.data(),search.size(),&o.acquisition,pending.data(),pending.size(),results.data(),o.acquisition_threads))throw std::runtime_error("live acquisition failed");
         bool acquired=false;
         for(const auto& result:results){
           auto& ch=c[result.prn-1];emit("acquisition",{{"prn",result.prn},{"acquired",int(result.acquired)},

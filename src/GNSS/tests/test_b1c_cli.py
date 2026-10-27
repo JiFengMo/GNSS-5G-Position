@@ -31,7 +31,8 @@ class ReceiverCLI(unittest.TestCase):
                           ("--sample-rate", "-1"), ("--prn", "64"), ("--prns", "1,1"),
                           ("--prns", "2-1"), ("--prns", "1,"), ("--skip-samples", "-1"),
                           ("--skip-samples", "18446744073709551616"),
-                          ("--input-format", "int8"), ("--unknown", "1"), ("--prn",)]:
+                          ("--input-format", "int8"), ("--unknown", "1"), ("--prn",),
+                          ("--threads", "0"), ("--threads", "64"), ("--threads", "1.5")]:
             with self.subTest(arguments=arguments):
                 self.assertEqual(self.run_receiver(*arguments).returncode, 2)
 

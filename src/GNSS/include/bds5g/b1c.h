@@ -75,7 +75,9 @@ void bds_b1c_acquisition_defaults(bds_b1c_acquisition_options_t *options);
  * of an integer period (1 Hz from a 100 Hz grid). FFT lengths are rounded;
  * mixing/replica generation still use the supplied, unrounded rate.
  * Returns 0 (also on no detections), -1 invalid input/options, -2 allocation
- * or FFT planning failure. FFTW planning calls must be externally serialized. */
+ * or FFT planning failure. This library serializes its FFTW planner calls;
+ * other FFTW users in the same process must coordinate their own planning.
+ * A configurable parallel entry point is declared in b1c_parallel.h. */
 int bds_b1c_acquire_many(const bds5g_cf32_t *samples, size_t sample_count,
                          const bds_b1c_acquisition_options_t *options,
                          const int *prns, size_t prn_count,

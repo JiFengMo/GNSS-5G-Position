@@ -65,10 +65,18 @@ class TrackingCLI(unittest.TestCase):
         self.assertEqual(summary["complete"], "0")
         self.assertFalse(json.loads((out / "run.json").read_text())["complete"])
 
+    def test_parallel_channels_keep_csv_and_event_order(self):
+        reference=self.root/'serial';parallel=self.root/'parallel'
+        self.assertEqual(self.run_track(reference,'--threads','1').returncode,0)
+        self.assertEqual(self.run_track(parallel,'--threads','4').returncode,0)
+        for name in ('prn_23.csv','prn_37.csv','events.csv','summary.csv'):
+            self.assertEqual((reference/name).read_bytes(),(parallel/name).read_bytes(),name)
+
     def test_invalid_options_seeds_and_nonfinite(self):
         for arguments in [("--sample-rate", "nan"), ("--seconds", ".015"),
                           ("--chunk-samples", "0"), ("--pll-bandwidth", "19"),
-                          ("--early-late", ".5"), ("--if", "0")]:
+                          ("--early-late", ".5"), ("--if", "0"),
+                          ("--threads", "0"), ("--threads", "64"), ("--threads", "1.5")]:
             with self.subTest(arguments=arguments):
                 self.assertEqual(self.run_track(self.root / "bad", *arguments).returncode, 2)
         self.iq.write_bytes(struct.pack("<ff", float("nan"), 0) + b"\0" * (8 * 219999))
@@ -104,6 +112,19 @@ class TrackingCLI(unittest.TestCase):
                 self.assertEqual(current["state"], "pull_in")
                 self.assertEqual(float(current["carrier_cycles"]), 0)
                 self.assertEqual(current["valid"], "0")
+
+    def test_parallel_reacquisition_has_private_readers_and_order(self):
+        subprocess.run([GENERATOR,'--write-fixture',str(self.root)],check=True,timeout=120)
+        self.iq=self.root/'synthetic.ci8'
+        # A second seeded channel sees no matching signal and exercises failed
+        # reacquisition alongside PRN 23's successful recovery in other tasks.
+        with self.seeds.open('a') as stream:stream.write('37,20000,0,0,50,nan,1,0,1,0\n')
+        directories=[self.root/'reacq-serial',self.root/'reacq-parallel']
+        for threads,directory in zip((1,4),directories):
+            run=self.run_track(directory,'--seconds','4','--max-reacquisitions','3','--threads',str(threads))
+            self.assertEqual(run.returncode,0,run.stderr)
+        for filename in ('prn_23.csv','prn_37.csv','events.csv','summary.csv'):
+            self.assertEqual((directories[0]/filename).read_bytes(),(directories[1]/filename).read_bytes(),filename)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@
  * Reference conventions and limitations: ../docs/offline_acquisition.md.
  */
 #include "bds5g/b1c.h"
+#include "b1c_acquisition_internal.h"
 
 #include <fftw3.h>
 #include <limits.h>
@@ -81,11 +82,52 @@ static double amplitude(double i, double q)
   return sqrt(i * i + q * q);
 }
 
-int bds_b1c_acquire_many(const bds5g_cf32_t *samples, size_t sample_count,
-                         const bds_b1c_acquisition_options_t *o,
-                         const int *prns, size_t prn_count,
-                         bds_b1c_acquisition_t *results)
+struct acquisition_workspace {
+  fftw_complex *work, *signal, *data_fft, *pilot_fft;
+  double *data_magnitude;
+  int8_t *data, *pilot;
+  fftw_plan forward, inverse;
+};
+struct b1c_acquisition_batch {
+  const bds5g_cf32_t *samples;
+  bds_b1c_acquisition_options_t options;
+  const int *prns;
+  size_t prn_count, period, coherent, length, frequency_count;
+  double normalization, fft_bins_per_step;
+  int shifted_grid;
+  unsigned workers;
+  bds_b1c_acquisition_t *results;
+  fftw_complex *shared_signal;
+  struct acquisition_workspace *workspace;
+};
+
+void b1c_acquisition_destroy(b1c_acquisition_batch_t *b)
 {
+  if (!b) return;
+  /* https://www.fftw.org/fftw3_doc/Thread-safety.html */
+  b1c_fftw_planner_lock();
+  for (unsigned j=0; b->workspace && j<b->workers; ++j) {
+    struct acquisition_workspace *w=&b->workspace[j];
+    if (w->forward) fftw_destroy_plan(w->forward);
+    if (w->inverse) fftw_destroy_plan(w->inverse);
+    fftw_free(w->work); fftw_free(w->signal);
+    fftw_free(w->data_fft); fftw_free(w->pilot_fft);
+    free(w->data_magnitude); free(w->data); free(w->pilot);
+  }
+  fftw_free(b->shared_signal);
+  b1c_fftw_planner_unlock();
+  free(b->workspace); free(b);
+}
+
+int b1c_acquisition_prepare(const bds5g_cf32_t *samples, size_t sample_count,
+                            const bds_b1c_acquisition_options_t *o,
+                            const int *prns, size_t prn_count,
+                            bds_b1c_acquisition_t *results, unsigned workers,
+                            b1c_acquisition_batch_t **out)
+{
+  if (!out) return -1;
+  *out = NULL;
+  if (!workers || workers > 63) return -1;
   if (!samples || !prns || !results || !prn_count || prn_count > 63 || !valid_options(o)) return -1;
   for (size_t p = 0; p < prn_count; ++p) {
     if (prns[p] < 1 || prns[p] > 63) return -1;
@@ -115,33 +157,78 @@ int bds_b1c_acquire_many(const bds5g_cf32_t *samples, size_t sample_count,
   }
   if (normalization == 0) return 0;
 
-  int status = -2;
-  fftw_complex *work = fftw_alloc_complex(length);
-  fftw_complex *signal = fftw_alloc_complex(length);
-  fftw_complex *data_fft = fftw_alloc_complex(length);
-  fftw_complex *pilot_fft = fftw_alloc_complex(length);
-  double *data_magnitude = malloc(length * sizeof(*data_magnitude));
-  int8_t *data = malloc(period), *pilot = malloc(period);
-  fftw_plan forward = NULL, inverse = NULL;
-  if (!work || !signal || !data_fft || !pilot_fft || !data_magnitude || !data || !pilot) goto done;
-  forward = fftw_plan_dft_1d((int)length, work, work, FFTW_FORWARD, FFTW_ESTIMATE);
-  inverse = fftw_plan_dft_1d((int)length, work, work, FFTW_BACKWARD, FFTW_ESTIMATE);
-  if (!forward || !inverse) goto done;
 
   const double fft_bins_per_step = o->doppler_step_hz * length / o->sample_rate_hz;
   const int shifted_grid = fabs(fft_bins_per_step - round(fft_bins_per_step)) < 1e-8;
   const size_t frequency_count = (size_t)llround((o->doppler_max_hz - o->doppler_min_hz) /
                                                o->doppler_step_hz) + 1U;
-  if (shifted_grid) {
-    mix(samples, length, o->sample_rate_hz, o->if_hz + o->doppler_max_hz, work);
-    fftw_execute(forward);
-    memcpy(signal, work, length * sizeof(*signal));
+  /* Bound transient workspace at high sample rates. No code-spectrum cache.
+   * All public entry points use this budget, including the serial API. */
+  const size_t budget=512U*1024U*1024U;
+  const size_t shared_bytes=shifted_grid ? length*sizeof(fftw_complex) : 0;
+  const size_t per_worker=length*((shifted_grid?3U:4U)*sizeof(fftw_complex)+sizeof(double))+2U*period;
+  size_t maximum=(budget-shared_bytes)/per_worker;
+  if (!maximum) return -2;
+  if (workers>prn_count) workers=(unsigned)prn_count;
+  if (workers>maximum) workers=(unsigned)maximum;
+  b1c_acquisition_batch_t *b=calloc(1,sizeof(*b));
+  if (!b) return -2;
+  b->samples=samples; b->options=*o; b->prns=prns; b->prn_count=prn_count;
+  b->results=results; b->period=period; b->coherent=coherent; b->length=length;
+  b->normalization=normalization; b->fft_bins_per_step=fft_bins_per_step;
+  b->shifted_grid=shifted_grid; b->frequency_count=frequency_count; b->workers=workers;
+  b->workspace=calloc(workers,sizeof(*b->workspace));
+  if (!b->workspace) { b1c_acquisition_destroy(b); return -2; }
+  int status=0;
+  b1c_fftw_planner_lock();
+  if (shifted_grid) {b->shared_signal=fftw_alloc_complex(length);if(!b->shared_signal)status=-2;}
+  for (unsigned j=0; j<workers && !status; ++j) {
+    struct acquisition_workspace *w=&b->workspace[j];
+    w->work=fftw_alloc_complex(length);
+    if (!shifted_grid) w->signal=fftw_alloc_complex(length);
+    w->data_fft=fftw_alloc_complex(length); w->pilot_fft=fftw_alloc_complex(length);
+    w->data_magnitude=malloc(length*sizeof(*w->data_magnitude));
+    w->data=malloc(period); w->pilot=malloc(period);
+    if (!w->work || (!shifted_grid && !w->signal) || !w->data_fft || !w->pilot_fft ||
+        !w->data_magnitude || !w->data || !w->pilot) {status=-2;break;}
+    w->forward=fftw_plan_dft_1d((int)length,w->work,w->work,FFTW_FORWARD,FFTW_ESTIMATE);
+    w->inverse=fftw_plan_dft_1d((int)length,w->work,w->work,FFTW_BACKWARD,FFTW_ESTIMATE);
+    if (!w->forward || !w->inverse) status=-2;
   }
-  for (size_t p = 0; p < prn_count; ++p) {
+  b1c_fftw_planner_unlock();
+  if (status) {b1c_acquisition_destroy(b);return status;}
+  if (shifted_grid) {
+    struct acquisition_workspace *w=&b->workspace[0];
+    mix(samples,length,o->sample_rate_hz,o->if_hz+o->doppler_max_hz,w->work);
+    fftw_execute(w->forward);
+    memcpy(b->shared_signal,w->work,length*sizeof(*w->work));
+  }
+  *out=b; return 0;
+}
+
+unsigned b1c_acquisition_workers(const b1c_acquisition_batch_t *b) {return b->workers;}
+
+int b1c_acquisition_run(b1c_acquisition_batch_t *b, unsigned worker)
+{
+  if (!b || worker>=b->workers) return -1;
+  const bds5g_cf32_t *samples=b->samples;
+  const bds_b1c_acquisition_options_t *o=&b->options;
+  const int *prns=b->prns; const size_t prn_count=b->prn_count;
+  bds_b1c_acquisition_t *results=b->results;
+  const size_t period=b->period, coherent=b->coherent, length=b->length;
+  const double normalization=b->normalization, fft_bins_per_step=b->fft_bins_per_step;
+  const size_t frequency_count=b->frequency_count; const int shifted_grid=b->shifted_grid;
+  struct acquisition_workspace *w=&b->workspace[worker];
+  fftw_complex *work=w->work, *signal=shifted_grid?b->shared_signal:w->signal;
+  fftw_complex *data_fft=w->data_fft, *pilot_fft=w->pilot_fft;
+  double *data_magnitude=w->data_magnitude;
+  int8_t *data=w->data, *pilot=w->pilot;
+  fftw_plan forward=w->forward, inverse=w->inverse;
+  for (size_t p = worker; p < prn_count; p += b->workers) {
     bds_b1c_acquisition_t *r = &results[p];
     if (bds_b1c_sample_boc11(prns[p], BDS_B1C_DATA, o->sample_rate_hz, data, period) ||
         bds_b1c_sample_boc11(prns[p], BDS_B1C_PILOT, o->sample_rate_hz, pilot, period)) {
-      status = -1; goto done;
+      return -1;
     }
     for (size_t k = 0; k < length; ++k) {
       work[k][0] = k < coherent ? data[k] : 0; work[k][1] = 0;
@@ -197,13 +284,18 @@ int bds_b1c_acquire_many(const bds5g_cf32_t *samples, size_t sample_count,
     r->carrier_hz = o->if_hz + r->doppler_hz;
     r->fine_metric = best_fine;
   }
-  status = 0;
-done:
-  if (forward) fftw_destroy_plan(forward);
-  if (inverse) fftw_destroy_plan(inverse);
-  fftw_free(work); fftw_free(signal); fftw_free(data_fft); fftw_free(pilot_fft);
-  free(data_magnitude); free(data); free(pilot);
-  return status;
+  return 0;
+}
+
+int bds_b1c_acquire_many(const bds5g_cf32_t *samples, size_t sample_count,
+                         const bds_b1c_acquisition_options_t *o,
+                         const int *prns, size_t prn_count,
+                         bds_b1c_acquisition_t *results)
+{
+  b1c_acquisition_batch_t *batch=NULL;
+  int status=b1c_acquisition_prepare(samples,sample_count,o,prns,prn_count,results,1,&batch);
+  if (!status && batch) status=b1c_acquisition_run(batch,0);
+  b1c_acquisition_destroy(batch); return status;
 }
 
 int bds_b1c_acquire(const bds5g_cf32_t *samples, size_t sample_count, double fs,

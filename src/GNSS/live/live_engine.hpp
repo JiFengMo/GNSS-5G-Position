@@ -1,5 +1,6 @@
 #pragma once
 #include "bds5g/b1c_position.h"
+#include "bds5g/b1c_parallel.h"
 #include "live_json.hpp"
 #include <atomic>
 #include <condition_variable>
@@ -15,7 +16,7 @@ struct Block {uint64_t first=0;std::vector<bds5g_cf32_t> iq;bool discontinuous=f
 class Queue {
   size_t capacity_,samples_=0;std::deque<Block> blocks_;std::mutex mutex_;std::condition_variable cv_;bool closed_=false;
 public:
-  std::atomic<uint64_t> dropped_samples{0},overruns{0};
+  std::atomic<uint64_t> dropped_samples{0},overruns{0},peak_samples{0};
   explicit Queue(size_t capacity):capacity_(capacity){}
   void push(Block block);
   bool pop(Block& block);
@@ -26,6 +27,7 @@ struct Options {
   double fs=4092000,if_hz=0,rf_hz=1575420000;
   double period_ms=200,elevation=5,offset_ms=68.802,max_age=7200;
   bool tropo=true;
+  unsigned acquisition_threads=1,tracking_threads=1;
   bds_b1c_acquisition_options_t acquisition{};
   bds_b1c_tracking_options_t tracking{};
   std::vector<int> prns;

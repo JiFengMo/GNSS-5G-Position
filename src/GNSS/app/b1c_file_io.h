@@ -42,7 +42,7 @@ static int b1c_file_read(b1c_file_reader_t *r, bds5g_cf32_t *out, size_t count, 
   if (count>SIZE_MAX/r->width) return -1;
   if (count*r->width>r->capacity) {
     void *raw=realloc(r->raw,count*r->width); if (!raw) return -1;
-    r->raw=raw; r->capacity=count*r->width;
+    r->raw=(unsigned char *)raw; r->capacity=count*r->width;
   }
   size_t bytes=fread(r->raw,1,count*r->width,r->file);
   if (ferror(r->file) || bytes%r->width) return -1;

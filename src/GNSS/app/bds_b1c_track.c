@@ -1,6 +1,10 @@
 #include "bds5g/b1c_tracking.h"
+#include "bds5g/b1c_parallel.h"
 #include "b1c_file_io.h"
 
+struct pending_event {
+  uint64_t generation,sample; const char *name; double metric,carrier; size_t phase;
+};
 struct channel {
   bds_b1c_tracker_t *tracker;
   bds_b1c_acquisition_t seed;
@@ -10,12 +14,27 @@ struct channel {
   double last_doppler;
   int active, error, io_error, last_state;
   FILE *csv, *events;
+  struct pending_event *pending_events;
+  size_t event_count,event_capacity;
+  int defer_events;
+  b1c_file_reader_t reacquisition_reader;
+  bds5g_cf32_t *acquisition_samples;
 };
 static const char *state_name(int state)
 { return state==BDS_B1C_LOCKED ? "locked" : state==BDS_B1C_LOST ? "lost" : "pull_in"; }
 static void event(struct channel *c, uint64_t generation, uint64_t sample,
                     const char *name, double metric, double carrier, size_t phase)
 {
+  if (c->defer_events) {
+    if (c->event_count==c->event_capacity) {
+      size_t capacity=c->event_capacity?2*c->event_capacity:8;
+      void *pending=realloc(c->pending_events,capacity*sizeof(*c->pending_events));
+      if (!pending) {c->io_error=1;return;}
+      c->pending_events=pending;c->event_capacity=capacity;
+    }
+    c->pending_events[c->event_count++]=(struct pending_event){generation,sample,name,metric,carrier,phase};
+    return;
+  }
   if (fprintf(c->events,"%d,%llu,%llu,%s,%.17g,%.17g,%zu\n",c->seed.prn,
       (unsigned long long)generation,(unsigned long long)sample,name,metric,carrier,phase)<0) c->io_error=1;
 }
@@ -77,6 +96,7 @@ static void usage(const char *p)
     "  --if HZ                   Default 0, must match acquisition\n"
     "  --seconds S               Default 60, multiple of .01, up to 3600\n"
     "  --prns LIST               Optional comma-separated acquired PRNs\n"
+    "  --threads N               Channel workers, 1..63; default 1 (serial)\n"
     "  --chunk-samples N         Default 65536, independent of code epochs\n"
     "  --dll-bandwidth HZ        Default 1\n"
     "  --pll-bandwidth HZ        Default 18 (0 < BW <=18)\n"
@@ -107,9 +127,61 @@ static FILE *output_file(const char *directory, const char *name, const char *iq
       b1c_same_file(path,iq) || b1c_same_file(path,capture)) return NULL;
   return fopen(path,"w");
 }
+struct tracking_batch {
+  struct channel *channels;
+  const bds5g_cf32_t *samples;
+  uint64_t cursor,end;
+  const bds_b1c_tracking_options_t *options;
+  unsigned max_reacquisitions;
+  size_t acquisition_count;
+  const char *input;
+  int ci8;
+};
+static void track_channel(size_t index, void *context)
+{
+  const struct tracking_batch *batch=context;
+  struct channel *c=&batch->channels[index];
+  const bds5g_cf32_t *samples=batch->samples;
+  const bds_b1c_tracking_options_t *options=batch->options;
+  uint64_t cursor=batch->cursor,end=batch->end;
+  unsigned max_reacquisitions=batch->max_reacquisitions;
+  size_t acquisition_count=batch->acquisition_count;
+  while (c->active) {
+    uint64_t next=bds_b1c_tracker_next_sample(c->tracker);
+    if (next>=end) break;
+    if (next<cursor) { c->error=6; break; }
+    size_t n=bds_b1c_tracker_samples_to_epoch(c->tracker);
+    if (n>end-next) n=(size_t)(end-next);
+    int result=bds_b1c_tracker_push(c->tracker,samples+(size_t)(next-cursor),n,next,epoch_record,c);
+    if (result) { c->error=6; break; }
+    if (c->io_error) { c->error=3; break; }
+    if (c->written>=c->target) { c->active=0; break; }
+    next=bds_b1c_tracker_next_sample(c->tracker);
+    if (bds_b1c_tracker_state(c->tracker)==BDS_B1C_LOST &&
+        !bds_b1c_tracker_pending_samples(c->tracker) && next>=c->next_attempt && c->attempts<max_reacquisitions) {
+      ++c->attempts; c->next_attempt=next+(uint64_t)llround(options->sample_rate_hz);
+      size_t got=0; bds_b1c_acquisition_t found={0};
+      bds_b1c_acquisition_options_t ao; bds_b1c_acquisition_defaults(&ao);
+      ao.sample_rate_hz=options->sample_rate_hz; ao.if_hz=options->if_hz;
+      ao.doppler_min_hz=c->last_doppler-1000; ao.doppler_max_hz=c->last_doppler+1000;
+      if (!c->acquisition_samples) c->acquisition_samples=malloc(acquisition_count*sizeof(*c->acquisition_samples));
+      int status=!c->acquisition_samples;
+      if (!status && !c->reacquisition_reader.file) status=b1c_file_open(&c->reacquisition_reader,batch->input,batch->ci8);
+      if (!status) status=b1c_file_seek(&c->reacquisition_reader,next) ||
+        b1c_file_read(&c->reacquisition_reader,c->acquisition_samples,acquisition_count,&got) || got!=acquisition_count;
+      if (!status) status=bds_b1c_acquire_many(c->acquisition_samples,got,&ao,&c->seed.prn,1,&found);
+      if (!status && found.acquired && !bds_b1c_tracker_reset(c->tracker,&found,next)) {
+        ++c->successes; c->last_state=BDS_B1C_PULL_IN;
+        event(c,c->successes,bds_b1c_tracker_next_sample(c->tracker),"reacquire_ok",found.peak_metric,found.carrier_hz,found.code_phase_samples);
+      } else event(c,c->successes,next,"reacquire_failed",found.peak_metric,NAN,0);
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   const char *input=NULL, *capture=NULL, *directory=NULL, *prn_filter=NULL;
+  unsigned threads=1;
   int ci8=0; double seconds=60; size_t chunk=65536; unsigned max_reacquisitions=3;
   bds_b1c_tracking_options_t options; bds_b1c_tracking_defaults(&options); options.sample_rate_hz=0;
   for (int k=1;k<argc;++k) {
@@ -127,6 +199,9 @@ int main(int argc, char **argv)
       while (*p) { char *end; if (*p<'0'||*p>'9') goto invalid;
         long n=strtol(p,&end,10); if (n<1||n>63) goto invalid;
         p=end; if (*p && (*p++!=',' || !*p)) goto invalid; }
+    } else if (!strcmp(key,"--threads")) {
+      if (b1c_number(value,&integer) || integer<1 || integer>63 || integer!=floor(integer)) goto invalid;
+      threads=(unsigned)integer;
     } else if (!strcmp(key,"--input-format")) {
       if (strcmp(value,"ci8") && strcmp(value,"cf32")) goto invalid;
       ci8=!strcmp(value,"ci8");
@@ -177,8 +252,9 @@ int main(int argc, char **argv)
   if (!error && !channel_count) { fprintf(stderr,"No acquired PRNs selected\n"); return 7; }
   if (!error && b1c_mkdirs(directory)) error=3;
   FILE *events=NULL, *summary=NULL;
-  b1c_file_reader_t reader={0}, reacquisition_reader={0};
-  bds5g_cf32_t *samples=NULL, *acquisition_samples=NULL;
+  b1c_file_reader_t reader={0};
+  bds5g_cf32_t *samples=NULL;
+  bds_b1c_worker_pool_t *pool=NULL;
   if (!error) {
     events=output_file(directory,"events.csv",input,capture);
     summary=output_file(directory,"summary.csv",input,capture);
@@ -199,9 +275,10 @@ int main(int argc, char **argv)
     for (size_t j=0;j<channel_count;++j)
       event(&channels[j],0,bds_b1c_tracker_next_sample(channels[j].tracker),"init",channels[j].seed.peak_metric,
             channels[j].seed.carrier_hz,channels[j].seed.code_phase_samples);
-    samples=malloc(chunk*sizeof(*samples)); acquisition_samples=malloc(acquisition_count*sizeof(*samples));
-    if (!samples||!acquisition_samples || b1c_file_open(&reader,input,ci8) ||
-        b1c_file_open(&reacquisition_reader,input,ci8) || b1c_file_seek(&reader,cursor)) error=3;
+    samples=malloc(chunk*sizeof(*samples));
+    if (!samples || b1c_file_open(&reader,input,ci8) || b1c_file_seek(&reader,cursor) ||
+        bds_b1c_worker_pool_create(threads<channel_count?threads:(unsigned)channel_count,&pool)) error=3;
+    for (size_t j=0;j<channel_count;++j) channels[j].defer_events=threads>1;
   }
   fprintf(stderr,"B1C continuous tracking: %zu channels, %.2f s, fs=%.0f, chunk=%zu\n",channel_count,seconds,options.sample_rate_hz,chunk);
   while (!error) {
@@ -213,35 +290,18 @@ int main(int argc, char **argv)
     if (!count) { error=3; fprintf(stderr,"EOF before all requested full code epochs completed\n"); break; }
     if (cursor>UINT64_MAX-count) { error=6; break; }
     uint64_t end=cursor+count;
+    struct tracking_batch batch={channels,samples,cursor,end,&options,max_reacquisitions,acquisition_count,input,ci8};
+    if (bds_b1c_worker_pool_run(pool,channel_count,track_channel,&batch)) error=6;
+    /* Replay shared events in the original channel order after the barrier.
+     * Per-PRN CSV files and reacquisition readers have no shared writer/state. */
     for (size_t j=0;j<channel_count;++j) {
-      struct channel *c=&channels[j];
-      while (c->active) {
-        uint64_t next=bds_b1c_tracker_next_sample(c->tracker);
-        if (next>=end) break;
-        if (next<cursor) { c->error=error=6; break; }
-        size_t n=bds_b1c_tracker_samples_to_epoch(c->tracker);
-        if (n>end-next) n=(size_t)(end-next);
-        int result=bds_b1c_tracker_push(c->tracker,samples+(size_t)(next-cursor),n,next,epoch_record,c);
-        if (result) { c->error=error=6; break; }
-        if (c->io_error) { error=3; break; }
-        if (c->written>=c->target) { c->active=0; break; }
-        next=bds_b1c_tracker_next_sample(c->tracker);
-        if (bds_b1c_tracker_state(c->tracker)==BDS_B1C_LOST &&
-            !bds_b1c_tracker_pending_samples(c->tracker) && next>=c->next_attempt && c->attempts<max_reacquisitions) {
-          ++c->attempts; c->next_attempt=next+(uint64_t)llround(options.sample_rate_hz);
-          size_t got=0; bds_b1c_acquisition_t found={0};
-          bds_b1c_acquisition_options_t ao; bds_b1c_acquisition_defaults(&ao);
-          ao.sample_rate_hz=options.sample_rate_hz; ao.if_hz=options.if_hz;
-          ao.doppler_min_hz=c->last_doppler-1000; ao.doppler_max_hz=c->last_doppler+1000;
-          int status=b1c_file_seek(&reacquisition_reader,next) ||
-            b1c_file_read(&reacquisition_reader,acquisition_samples,acquisition_count,&got) || got!=acquisition_count;
-          if (!status) status=bds_b1c_acquire_many(acquisition_samples,got,&ao,&c->seed.prn,1,&found);
-          if (!status && found.acquired && !bds_b1c_tracker_reset(c->tracker,&found,next)) {
-            ++c->successes; c->last_state=BDS_B1C_PULL_IN;
-            event(c,c->successes,bds_b1c_tracker_next_sample(c->tracker),"reacquire_ok",found.peak_metric,found.carrier_hz,found.code_phase_samples);
-          } else event(c,c->successes,next,"reacquire_failed",found.peak_metric,NAN,0);
-        }
+      struct channel *c=&channels[j];c->defer_events=0;
+      for (size_t k=0;k<c->event_count;++k) {
+        const struct pending_event *e=&c->pending_events[k];
+        event(c,e->generation,e->sample,e->name,e->metric,e->carrier,e->phase);
       }
+      c->event_count=0;c->defer_events=threads>1;
+      if (!error && (c->error||c->io_error)) error=c->error?c->error:3;
     }
     cursor=end;
   }
@@ -263,14 +323,17 @@ int main(int argc, char **argv)
   for (size_t j=0;j<channel_count;++j) {
     if (channels[j].csv && close_output(channels[j].csv)) error=3;
     bds_b1c_tracker_destroy(channels[j].tracker);
+    b1c_file_close(&channels[j].reacquisition_reader);
+    free(channels[j].acquisition_samples);free(channels[j].pending_events);
   }
-  b1c_file_close(&reader); b1c_file_close(&reacquisition_reader);
-  free(samples); free(acquisition_samples);
+  bds_b1c_worker_pool_destroy(pool);
+  b1c_file_close(&reader);free(samples);
   if (summary) {
     FILE *metadata=output_file(directory,"run.json",input,capture);
     if (!metadata) return 3;
     fputs("{\n  \"schema_version\": 1,\n  \"input_path\": ",metadata); json_string(metadata,input);
     fputs(",\n  \"acquisition_csv\": ",metadata); json_string(metadata,capture);
+    fprintf(metadata,",\n  \"threads\": %u",threads);
     fprintf(metadata,",\n  \"input_format\": \"%s\",\n  \"sample_rate_hz\": %.17g,\n  \"if_hz\": %.17g,\n"
       "  \"requested_seconds\": %.17g,\n  \"requested_epochs_per_channel\": %llu,\n"
       "  \"chunk_samples\": %zu,\n  \"dll_bandwidth_hz\": %.17g,\n  \"dll_damping\": %.17g,\n"

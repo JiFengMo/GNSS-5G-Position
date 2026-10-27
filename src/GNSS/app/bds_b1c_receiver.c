@@ -1,4 +1,5 @@
 #include "bds5g/b1c.h"
+#include "bds5g/b1c_parallel.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -15,6 +16,7 @@ static void usage(const char *program)
 {
   fprintf(stderr,
     "Usage: %s --input FILE --sample-rate HZ [options]\n"
+    "  --threads N             PRN workers, 1..63; default 1 (serial)\n"
     "  --input-format ci8|cf32    Interleaved I,Q (cf32: little-endian), default cf32\n"
     "  --prn N | --prns LIST      Comma-separated PRNs/ranges (default 1-63)\n"
     "  --if HZ                   Residual IF, default 0; carrier = IF + Doppler\n"
@@ -102,7 +104,7 @@ static int read_iq(const char *path, int ci8, uint64_t skip, size_t count,
 int main(int argc, char **argv)
 {
   const char *input = NULL, *output = NULL, *list = "1-63";
-  int ci8 = 0;
+  int ci8 = 0; unsigned threads = 1;
   uint64_t skip = 0;
   bds_b1c_acquisition_options_t o;
   bds_b1c_acquisition_defaults(&o); o.sample_rate_hz = 0;
@@ -115,7 +117,11 @@ int main(int argc, char **argv)
     if (!strcmp(key, "--input")) input = value;
     else if (!strcmp(key, "--output")) output = value;
     else if (!strcmp(key, "--prn") || !strcmp(key, "--prns")) list = value;
-    else if (!strcmp(key, "--input-format")) {
+    else if (!strcmp(key, "--threads")) {
+      double n;
+      if (number(value,&n) || n<1 || n>63 || n!=floor(n)) goto invalid;
+      threads=(unsigned)n;
+    } else if (!strcmp(key, "--input-format")) {
       if (strcmp(value, "ci8") && strcmp(value, "cf32")) goto invalid;
       ci8 = !strcmp(value, "ci8");
     } else if (!strcmp(key, "--skip-samples")) {
@@ -155,7 +161,7 @@ int main(int argc, char **argv)
   }
   fprintf(stderr, "B1C offline acquisition: %zu PRNs, %zu samples, fs=%.0f, IF=%.3f\n",
           count, samples_count, o.sample_rate_hz, o.if_hz);
-  const int error = bds_b1c_acquire_many(samples, samples_count, &o, prns, count, results);
+  const int error = bds_b1c_acquire_many_parallel(samples, samples_count, &o, prns, count, results, threads);
   free(samples);
   if (error) { fprintf(stderr, "Acquisition error %d: check finite IQ, search grids and options\n", error); return 6; }
   FILE *csv = output ? fopen(output, "w") : stdout;

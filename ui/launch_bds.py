@@ -26,6 +26,16 @@ from gnss import import_run
 from server import ROOT,load_settings,read_config
 
 JOB_KEYS={"input_file","input_format","sample_rate_hz","if_hz","seconds","prns","ui_port"}
+THREAD_KEYS={'acquisition_threads','tracking_threads'}
+
+
+def thread_settings(job):
+    # Old user configs remain serial unless workers are explicitly selected.
+    for key in THREAD_KEYS:
+        value=float(job.get(key,1))
+        if not math.isfinite(value) or not 1<=value<=63 or value!=int(value):
+            raise ValueError(f'{key} must be an integer in 1..63')
+        job[key]=int(value)
 
 
 class BDSProcessError(subprocess.CalledProcessError):
@@ -83,6 +93,7 @@ def radio_settings(path):
           'signal','prn_list','doppler_min_hz','doppler_max_hz','doppler_step_hz','coherent_integration_ms',
           'if_hz','master_clock_rate_hz','rx_antenna','fine_step_hz','acquisition_threshold','queue_seconds','ui_port',
           'dll_bandwidth_hz','pll_bandwidth_hz','early_late_chips','position_period_ms','elevation_mask_deg'}
+    thread_settings(job);keys|=THREAD_KEYS
     if set(job)!=keys:raise ValueError(f'Unknown/missing BDS radio settings: {sorted(set(job)^keys)}')
     if job['device']!='usrp_b210' or job['signal']!='BDS_B1C':raise ValueError('Only B210 / BDS_B1C is supported')
     for key in ('clock_source','time_source'):
@@ -113,7 +124,7 @@ def radio_settings(path):
         if not 1<=a<=b<=63:raise ValueError('PRNs must be 1..63')
         prns.extend(range(a,b+1))
     if len(set(prns))!=len(prns):raise ValueError('Duplicate PRNs')
-    job['ui_port']=int(job['ui_port']);return job
+    job['ui_port']=int(job['ui_port']);thread_settings(job);return job
 
 
 def radio_command(job,identifier):
@@ -122,7 +133,8 @@ def radio_command(job,identifier):
         'time_source':'time-source','rx_antenna':'antenna','prn_list':'prns','doppler_min_hz':'doppler-min','doppler_max_hz':'doppler-max',
         'doppler_step_hz':'doppler-step','fine_step_hz':'fine-step','acquisition_threshold':'threshold','queue_seconds':'queue-seconds',
         'dll_bandwidth_hz':'dll-bandwidth','pll_bandwidth_hz':'pll-bandwidth','early_late_chips':'early-late',
-        'position_period_ms':'period-ms','elevation_mask_deg':'elevation-mask'}
+        'position_period_ms':'period-ms','elevation_mask_deg':'elevation-mask',
+        'acquisition_threads':'acquisition-threads','tracking_threads':'tracking-threads'}
     command=[ROOT/'build/gnss-radio/src/GNSS/bds-b1c-live','--output-dir',ROOT/'log/gnss-live'/identifier,'--run-id',identifier]
     for key,option in names.items():command.extend(['--'+option,job[key]])
     if job['serial']:command.extend(['--serial',job['serial']])
@@ -164,8 +176,10 @@ def supervise_live(command,ui,logs,port,config_path=None,job=None):
 
 def job_settings(path,process=True):
     job=read_config(path)
-    if set(job)!=JOB_KEYS:
-        raise ValueError(f"Offline config requires {sorted(JOB_KEYS)}; unknown/missing: {sorted(set(job)^JOB_KEYS)}")
+    thread_settings(job)
+    expected=JOB_KEYS|THREAD_KEYS
+    if set(job)!=expected:
+        raise ValueError(f"Offline config requires {sorted(JOB_KEYS)}; unknown/missing: {sorted(set(job)^expected)}")
     port=int(job["ui_port"])
     if not 1024<=port<=65535:raise ValueError("ui_port must be 1024..65535")
     job["ui_port"]=port
@@ -229,8 +243,8 @@ def process_job(job,settings,identifier,run=run_child,importer=import_run):
     fs=job["sample_rate_hz"]
     common=["--input",job["input_file"],"--input-format",job["input_format"],"--sample-rate",fs,"--if",job["if_hz"]]
     stages=[
-        ("捕获",[binaries/"bds-b1c-receiver",*common,"--prns",job["prns"],"--output",capture],"acquisition"),
-        ("连续跟踪",[binaries/"bds-b1c-track",*common,"--acquisition-csv",capture,"--seconds",job["seconds"],"--output-dir",track],"tracking"),
+        ("捕获",[binaries/"bds-b1c-receiver",*common,"--threads",job.get('acquisition_threads',1),"--prns",job["prns"],"--output",capture],"acquisition"),
+        ("连续跟踪",[binaries/"bds-b1c-track",*common,"--threads",job.get('tracking_threads',1),"--acquisition-csv",capture,"--seconds",job["seconds"],"--output-dir",track],"tracking"),
         ("导航电文",[binaries/"bds-b1c-nav","--tracking-dir",track,"--sample-rate",fs,"--output-dir",nav],"navigation"),
         ("单点定位",[binaries/"bds-b1c-position","--tracking-dir",track,"--navigation-dir",nav,"--sample-rate",fs,"--output-dir",position],"position")]
     for label,command,name in stages:

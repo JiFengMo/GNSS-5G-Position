@@ -60,6 +60,21 @@ class BDSLauncherTests(unittest.TestCase):
             launch_bds.process_job(launch_bds.job_settings(self.config),{'gnss_directory':self.root/'ui'},'failed-run',fail,importer)
         self.assertEqual(len(calls),3);importer.assert_not_called()
 
+    def test_worker_options_are_optional_validated_and_forwarded(self):
+        job=launch_bds.job_settings(self.config)
+        self.assertEqual((job['acquisition_threads'],job['tracking_threads']),(1,1))
+        self.settings.update(acquisition_threads='8',tracking_threads='4');self.write()
+        job=launch_bds.job_settings(self.config)
+        self.assertEqual((job['acquisition_threads'],job['tracking_threads']),(8,4))
+        calls=[];importer=Mock(return_value=dict(prns=[],valid_frames=0,valid_fixes=0))
+        with patch.object(launch_bds,'ROOT',self.root):
+            launch_bds.process_job(job,{'gnss_directory':self.root/'ui'},'parallel-run',lambda c,l:calls.append(list(map(str,c))),importer)
+        self.assertEqual(calls[2][calls[2].index('--threads')+1],'8')
+        self.assertEqual(calls[3][calls[3].index('--threads')+1],'4')
+        for value in ('0','64','1.5','nan'):
+            self.settings['tracking_threads']=value;self.write()
+            with self.assertRaises(ValueError):launch_bds.job_settings(self.config)
+
     def test_interruption_stops_current_child(self):
         child=Mock();child.wait.side_effect=[KeyboardInterrupt,0]
         with patch.object(launch_bds.subprocess,'Popen',return_value=child),self.assertRaises(KeyboardInterrupt):
