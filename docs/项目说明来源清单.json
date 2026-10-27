@@ -1,0 +1,547 @@
+{
+  "title": "北斗与5G融合定位项目全流程说明",
+  "date": "2026-10-22",
+  "scope": "源码与配置核查及历史验证资料整理；本次未执行射频采集或重型构建",
+  "sources": [
+    {
+      "path": "README.md",
+      "sha256": "820399b2f77eac26c1d8931d62497b65fff019b06595ac17a1f277f6f208d5a2",
+      "bytes": 15411,
+      "line": 1
+    },
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "cd1289b2a4bbb8f9862f7b75da3fcbd6c425879badf7a5080f41ed1455c37b36",
+      "bytes": 1458,
+      "line": 1
+    },
+    {
+      "path": "CMakePresets.json",
+      "sha256": "86b12a2e670ce7bcfa610a0afc753d010276b993f8768b21b55d35f85aa2026c",
+      "bytes": 3198,
+      "line": 1
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "sha256": "f8d1b0b562030fb0d0b175a33434c8dabfc0cf561ab96499a947fab363ca231f",
+      "bytes": 2526,
+      "line": 1
+    },
+    {
+      "path": "src/5G/app/nr-toa-uesoftmodem.c",
+      "sha256": "8fded27829d949e52e9fb8e885f7fe38eb46f1932a571f8358134e597883934d",
+      "bytes": 45003,
+      "line": 47
+    },
+    {
+      "path": "src/5G/app/nr-ssb-anchor.c",
+      "sha256": "d53ffc72601007a8ed82e26be656e3be9998f2184242c2cfc60685de90b507b0",
+      "bytes": 3940,
+      "line": 24
+    },
+    {
+      "path": "src/5G/positioning/common/nr_config_router.c",
+      "sha256": "be3bb0b69e385d99e4a3160d2279b8fa1ac5fdff223e3a056e04bde95313eb55",
+      "bytes": 4564,
+      "line": 17
+    },
+    {
+      "path": "src/5G/positioning/common/nr_toa_cfg_loader.c",
+      "sha256": "82bab50649b357f39d4b195ed0ecfa12984d3162766d314e251cac5d2e2fd941",
+      "bytes": 9731,
+      "line": 10
+    },
+    {
+      "path": "src/5G/positioning/common/nr_iq_ring.c",
+      "sha256": "b2a3116ff3afc9760b5407cc1cd94fafb3a055e1765e59e25cdea9a617497a12",
+      "bytes": 7239,
+      "line": 8
+    },
+    {
+      "path": "src/5G/positioning/common/nr_epoch_mgr.c",
+      "sha256": "59e3cd4fc9b0b15b7d443e192a5b6413a0a4760e98bff518cddaaec0d8a8b4c2",
+      "bytes": 929,
+      "line": 5
+    },
+    {
+      "path": "src/5G/positioning/common/nr_meas_assoc.c",
+      "sha256": "73cee4bf6c72a4437a90c43236f5c2970106efb228b723ebec02b0ece59ee6a6",
+      "bytes": 244,
+      "line": 3
+    },
+    {
+      "path": "src/5G/positioning/common/nr_pos_solver.c",
+      "sha256": "379cb0aef8f80df8e65a1a03c1f9f951a7379169e2be3d76b9311af7ac88117c",
+      "bytes": 553,
+      "line": 5
+    },
+    {
+      "path": "src/5G/positioning/common/nr_anchor_write.c",
+      "sha256": "29aa81c2c72ae24286478cc814f45442497d42a0d6e16a5f00a4216ed2729b55",
+      "bytes": 1539,
+      "line": 9
+    },
+    {
+      "path": "src/5G/positioning/common/nr_ssb_tx_scheduler.c",
+      "sha256": "498e270ceec5847be4b0952c7b392bc235c5be00e33581c2d4925d9146079a39",
+      "bytes": 522,
+      "line": 5
+    },
+    {
+      "path": "src/5G/positioning/common/nr_ssb_beacon_gen.c",
+      "sha256": "89cf615b20f8939bdfc50aa4c788640fbe215e06f42ed00883890f105d9c5e2c",
+      "bytes": 1135,
+      "line": 6
+    },
+    {
+      "path": "src/5G/positioning/common/nr_clock_mgr.c",
+      "sha256": "62619a84c38166ebb93ec6442480566f96826ab125263752946d25de6bd46186",
+      "bytes": 1419,
+      "line": 8
+    },
+    {
+      "path": "src/5G/positioning/ssb/nr_ssb_provider.c",
+      "sha256": "ac343603f47847d9bc535b9fb5bf5f1f9a5fa5dffa7e1b762795589695a5f278",
+      "bytes": 13516,
+      "line": 23
+    },
+    {
+      "path": "src/5G/positioning/ssb/nr_ssb_sync.c",
+      "sha256": "9df61b1168c710baaf6ace71fea8bb9bf433f37ba377875afad04d56c265f656",
+      "bytes": 39593,
+      "line": 24
+    },
+    {
+      "path": "src/5G/positioning/ssb/nr_ssb_chest.c",
+      "sha256": "b0c58b4b909a8a75fa4bc49d5e77be352be80d8382e492755881c68590e307c6",
+      "bytes": 19359,
+      "line": 15
+    },
+    {
+      "path": "src/5G/positioning/ssb/nr_ssb_toa_est.c",
+      "sha256": "be61bf21a324717f5e9b7890d45ecc3ac2f46a18c978c9d6ab904aeca48200ad",
+      "bytes": 3257,
+      "line": 13
+    },
+    {
+      "path": "src/5G/positioning/ssb/nr_pbch.c",
+      "sha256": "d2af2383a4f035a3076b0177749fb12247c2b7b4d7add0cef8f16ed52688ea7d",
+      "bytes": 43516,
+      "line": 56
+    },
+    {
+      "path": "src/5G/positioning/prs/nr_prs_provider.c",
+      "sha256": "c913edcfc809a830cafe7b18dde746900ae8cd6213bb54d75bbda6c30d8fed82",
+      "bytes": 1330,
+      "line": 4
+    },
+    {
+      "path": "src/5G/positioning/prs/nr_prs_extract.c",
+      "sha256": "b98cbbb299c61789974ffe60400ccba63a6ca496c582444bb814be83cd456da3",
+      "bytes": 102,
+      "line": 5
+    },
+    {
+      "path": "src/5G/positioning/prs/nr_prs_chest.c",
+      "sha256": "1e0dc5fe5ab5ef88199e829f4bbfaa3eb693fa25119f296c24e44f7dd35c2be8",
+      "bytes": 77,
+      "line": 3
+    },
+    {
+      "path": "src/5G/positioning/prs/nr_prs_toa_est.c",
+      "sha256": "edc7d7f08bab21081312c531780c29047d52344f8ab24bcd68cb61432e4b5206",
+      "bytes": 79,
+      "line": 3
+    },
+    {
+      "path": "src/GNSS/bds_b1c/b1c_code.c",
+      "sha256": "dc04fcb41adf2acab0cd0148b2694f341b67e28c7d8fb17dbff7e48b3835bb45",
+      "bytes": 5905,
+      "line": 207
+    },
+    {
+      "path": "src/GNSS/bds_b1c/b1c_acquisition.c",
+      "sha256": "644b79514f267992f20699a5ce8a5ef80cbefb7bb8752d75a52f94ab053791af",
+      "bytes": 10516,
+      "line": 17
+    },
+    {
+      "path": "src/GNSS/bds_b1c/b1c_tracking.c",
+      "sha256": "e0198d469083f026570a4f77504465af1df61a9e85227d30b3dd0fc6e2196001",
+      "bytes": 15772,
+      "line": 40
+    },
+    {
+      "path": "src/GNSS/bds_b1c/b1c_navigation.c",
+      "sha256": "d7b34d944bac4399345f8300d914e9a0f2ecdf7deda16f448a88bf4257069115",
+      "bytes": 9045,
+      "line": 23
+    },
+    {
+      "path": "src/GNSS/bds_b1c/b1c_position.c",
+      "sha256": "0e8110cdf720799c9e65f9f3080773b1682f07569fe698fa1db53c2d3ee88ad3",
+      "bytes": 12159,
+      "line": 15
+    },
+    {
+      "path": "src/GNSS/live/live_engine.cpp",
+      "sha256": "9a68f914c4111c36b16d3158acb900d66ecac75d1970266a01dfe858185eaf59",
+      "bytes": 15991,
+      "line": 8
+    },
+    {
+      "path": "src/GNSS/live/uhd_b210.c",
+      "sha256": "edf5a36e7cf7b0664bb5bdb76c457ba5a3faa00857af4fd8c7daddae9c2e874b",
+      "bytes": 8170,
+      "line": 19
+    },
+    {
+      "path": "src/GNSS/live/bds_b1c_live.cpp",
+      "sha256": "2cc95da3b383a06deca48b6a77e23e130d7ab23ed6e2ae2b8c82f3cd5d2b9f1f",
+      "bytes": 11417,
+      "line": 13
+    },
+    {
+      "path": "src/fusion/solver/fusion_wls.c",
+      "sha256": "3ba064d259a2bf90166e814a361db1684f7115eddb906aff43e17fc0469a7d73",
+      "bytes": 6900,
+      "line": 8
+    },
+    {
+      "path": "src/fusion/adapters/nr5g_adapter.c",
+      "sha256": "f153e520bf8fbcc60615339653273722cdf276a24555372953abca7fd5a94bfe",
+      "bytes": 1226,
+      "line": 6
+    },
+    {
+      "path": "src/fusion/common/observation_io.c",
+      "sha256": "281596aaab1a928ace1cca4ffeffec101b6bff963a55c9f8a56f331078adc827",
+      "bytes": 2823,
+      "line": 7
+    },
+    {
+      "path": "src/fusion/app/bds5g_positioning.c",
+      "sha256": "4bd3a1d15b0cb7ddaf101e29678342c25324599c7854d04091ab7bcac7411a8a",
+      "bytes": 2988,
+      "line": 8
+    },
+    {
+      "path": "ui/server.py",
+      "sha256": "ce6810280f0e213da446ff9784d8bb54394c3f96cd47e3487beef96510b50fd0",
+      "bytes": 20953,
+      "line": 1
+    },
+    {
+      "path": "ui/gnss.py",
+      "sha256": "eef5506817e1a9ea8f97c7b0a0abce7f85b77d0154f51f58ed22ce897c5a7150",
+      "bytes": 24731,
+      "line": 1
+    },
+    {
+      "path": "ui/gnss_live.py",
+      "sha256": "07dccd4b83f6f39f1592d392f934580395c6dc455ee1cac742452c8dc5d98b77",
+      "bytes": 12619,
+      "line": 1
+    },
+    {
+      "path": "ui/import_gnss.py",
+      "sha256": "24dfc26aa0d94f63b939dca139b7f665240b6d198220b7bfa5a5ac4ab1e47f0b",
+      "bytes": 1576,
+      "line": 1
+    },
+    {
+      "path": "ui/launch_bds.py",
+      "sha256": "94888e5d48d5b062ff452826e9956de213a46e3002e5ad738d9f5bc571caf981",
+      "bytes": 15946,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/live_receiver.md",
+      "sha256": "365657ef8fcdbf170f9ad8c39a2b5479672b6209c669338d838ed8827b5a45cc",
+      "bytes": 6033,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/navigation.md",
+      "sha256": "f4865af673f938cab798c8f1592414a01b5385f07d413d36ae21efacbbd0d0ce",
+      "bytes": 9007,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/offline_acquisition.md",
+      "sha256": "9a36ed66393151c709d129ac3bd216096a8d00840a5b9633b46c4863e24707bf",
+      "bytes": 9144,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/positioning.md",
+      "sha256": "b1202c0a4a91e8da3bd45a75e3fbb429bbd7bf59eec4107dfaa2331994dcc95a",
+      "bytes": 10887,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/tracking.md",
+      "sha256": "40b1420ddec2e28e99ee171d8d92f0209dd6eae69f8340ae93df8ff9b41ffc7b",
+      "bytes": 10943,
+      "line": 112
+    },
+    {
+      "path": "src/GNSS/docs/validation_2026-10-20.md",
+      "sha256": "407ec4b9922bff2965ee8252c11e28fb0d4cb7bc78b3358c846697b890ca26a4",
+      "bytes": 4240,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/validation_navigation_2026-10-21.md",
+      "sha256": "a881fe092ed3a7877601f0c129aaecfd326bd597163e26a954b6d7a48e2628cc",
+      "bytes": 6167,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/validation_position_2026-10-21.md",
+      "sha256": "f74b4667b35f69848edbcd998cd4a0cba3b49aff0d52ef74486b32e1e6ac515a",
+      "bytes": 7100,
+      "line": 1
+    },
+    {
+      "path": "src/GNSS/docs/validation_tracking_2026-10-21.md",
+      "sha256": "e084ba4cf83df0e45c322f0fba535ead6c872877b301971235152d5f302da237",
+      "bytes": 5218,
+      "line": 1
+    },
+    {
+      "path": "src/5G/docs/README.md",
+      "sha256": "ec7e7b06f5ffbf48c384b31f841665fedb2946208ed5b9ff03fd824185c9160c",
+      "bytes": 4890,
+      "line": 1
+    },
+    {
+      "path": "src/fusion/docs/architecture.md",
+      "sha256": "f27fd9e3b0b1794dfd9b0b33791c4ad638c17727a29eb387242f99553f02d075",
+      "bytes": 1689,
+      "line": 1
+    },
+    {
+      "path": "src/fusion/docs/data_formats.md",
+      "sha256": "0f24bd97e6630872a38e2a15cd8019ddf308cefb94c4ced6c4e2ad69ef6649aa",
+      "bytes": 1133,
+      "line": 1
+    },
+    {
+      "path": "ui/README.md",
+      "sha256": "61f1db964f701b3caa3b27183dadb0162350716dccfc47ab2cb6a27d8b54425e",
+      "bytes": 7579,
+      "line": 1
+    },
+    {
+      "path": "ui/gnss.md",
+      "sha256": "b5b15632e3c066339e2242eb8c13e18bbe0cbf1f7214e1eaee843c3eccf22c7b",
+      "bytes": 11198,
+      "line": 1
+    },
+    {
+      "path": "ui/protocol.md",
+      "sha256": "9525792c5cfe9d044bf8f2499ef3b6197e102829dad7dd923f632c3a025c7609",
+      "bytes": 7363,
+      "line": 1
+    },
+    {
+      "path": "ui/validation_gnss_2026-10-22.md",
+      "sha256": "b65a2676524a91efe812c1b7f0efaa4644ef3e7adcaa002da0c0961f2a5fbf84",
+      "bytes": 6495,
+      "line": 1
+    },
+    {
+      "path": "config/5G/anchor0.ssb.usrpb210.f",
+      "sha256": "6cd9093b73dd971865a62f032d0068400d5c971dce1bbe1049f902d028c204e2",
+      "bytes": 1348,
+      "line": 1
+    },
+    {
+      "path": "config/5G/anchor1.ssb.usrpb210.f",
+      "sha256": "c12cc2cdcc01ce58192a724b0d087faec506ed3c86e0f80f5d0a21d870088943",
+      "bytes": 1336,
+      "line": 1
+    },
+    {
+      "path": "config/5G/nr_n78_reference.f",
+      "sha256": "4f115cac0714bc204b5fe47d0ac2d5321fff30cc612802964ce013211e767348",
+      "bytes": 2034,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.prs.usrpb210.f",
+      "sha256": "1a2ec82f364d86d7da1c15dfd1755b83a009755a3965b622873b34902f658308",
+      "bytes": 1334,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.limesdr.f",
+      "sha256": "1d41dc1a5136b8d411667b5ac13e8285f18a42e204013b8db14f04d7259f2fac",
+      "bytes": 1346,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.ctc3509.fixed.f",
+      "sha256": "080a6978990a33ede781cde55da36344b9300b742928caa596a621dcf793b815",
+      "bytes": 1917,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.ctc3509.lowrate.f",
+      "sha256": "91eb347cfa16705e4cd562857345a4325dc4bd22c14cc587e014492294f6b7af",
+      "bytes": 1492,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.f",
+      "sha256": "7a26fbef6822ef8141f2e1690e70fe94d2ecc4357da45c7d60e1ccf90b47892d",
+      "bytes": 1494,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.local3600.txrx.f",
+      "sha256": "bea68a73178db382bccc6d5724002cc55d487f8426612f00591ebb7b633a2dcb",
+      "bytes": 2306,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.lowrate.f",
+      "sha256": "565ecb4716136fd5904964307fc145d6244ae40939954617d72152420d08ae3b",
+      "bytes": 1492,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.multi-target.f",
+      "sha256": "463e4d1f60e488229790d085f1b4a728ab43b2864e99d2c8dc587bf3440a83ff",
+      "bytes": 2607,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.n1_2114.fixed.f",
+      "sha256": "a2109bb0e58c616022b1895bcb43ed50f20849d410094f6b12141ad24bad61a9",
+      "bytes": 1799,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f",
+      "sha256": "6b445099d2df1d8cd99d8d9b9096b1a11611d8e08a7fd5af704ba03bb77e49e5",
+      "bytes": 2509,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.n1_422910_pci84.ultrarate.f",
+      "sha256": "98a2d37df3e328371daff65694aafdb8eb293f166262849c8edcd90048797582",
+      "bytes": 2385,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.oai_default_b210.f",
+      "sha256": "41d367543828a5cb056278f69ea971bd3da24e8ed40b25286e8ce3114a634346",
+      "bytes": 2640,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.oai_n78_pci0_arfcn641280.f",
+      "sha256": "cf58866b9695765ad5c2f4236d14cc59d2785b2179df57cbcea8cde1523a0abc",
+      "bytes": 2883,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.f",
+      "sha256": "a2fd58ea70518891d393486c835f752e51bcb7e77bb3740f5794f7d2e20637dc",
+      "bytes": 1494,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.lowrate.f",
+      "sha256": "cf35efb8c1b161c8cd98326ab0fc28252cc333669074cdc6c641b0a87fd87d07",
+      "bytes": 1602,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.lowrate60.f",
+      "sha256": "ef737b25704c4d708a3fcdc85e4ea269fe9498652a72a9334c5a5ca90c0559dc",
+      "bytes": 1602,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.midrate.f",
+      "sha256": "a0eab4e95b1a3109538df25d52822b4b32fe838f52dad5b8003281e9922ac700",
+      "bytes": 1494,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.oai.f",
+      "sha256": "ec4c9370046ff959c47bad3098f80f458838d68f67c64cb2c57c645ae946651d",
+      "bytes": 1911,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.f",
+      "sha256": "07236f541bdcffe22f83217ff047f84a1cda6ae77be5a7e42b1988ed32948300",
+      "bytes": 1909,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.fixed355008.f",
+      "sha256": "2262f7ca8187f79e3fd7e3cbb0ba4437117f0b1228d4d1f84c98f5b7dddceee9",
+      "bytes": 2029,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.fixed355872.f",
+      "sha256": "c9b568d2b03555653e84fe3aad26080e775203a61bc0f780e289a469734a514e",
+      "bytes": 2029,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.usb3.fixed355872.f",
+      "sha256": "fb3dc4e1bfa1f0a6abf8fa92f2416df695bc4d380e95b02d0accfbf988040cd1",
+      "bytes": 2031,
+      "line": 1
+    },
+    {
+      "path": "config/5G/ue.toa.ssb.usrpb210.unicom3550.usb3.sweep.f",
+      "sha256": "cc8e376475219fc757ab336944f22c67973b3f9e7d15797dcbb689dd210fe581",
+      "bytes": 2031,
+      "line": 1
+    },
+    {
+      "path": "config/GNSS/bds_b1c.f",
+      "sha256": "3ca7538151063b2e3559e8649d1070387f86d824850e786ff45677ba852cd3a4",
+      "bytes": 3240,
+      "line": 1
+    },
+    {
+      "path": "config/GNSS/offline.f",
+      "sha256": "710a8a44350e54011ad784f946b46e476d72cdb5dbc83b9f13dc620801c55b13",
+      "bytes": 1160,
+      "line": 1
+    },
+    {
+      "path": "config/UI/monitor.f",
+      "sha256": "70088040a6daaa84bdbb38f271adda24ee076b1a971afa080fab19c2797e43c1",
+      "bytes": 2078,
+      "line": 1
+    },
+    {
+      "path": "config/config.f",
+      "sha256": "3e450074f8c18c69d606c469b6ab569872f983d51445f44ca4995d1e6bdaceac",
+      "bytes": 1426,
+      "line": 1
+    },
+    {
+      "path": "config/fusion/wls.f",
+      "sha256": "4879d0ea4ace22f6d1b5497a4e6711a9157d723c4d529da8cdbc35ee626f0af4",
+      "bytes": 1818,
+      "line": 1
+    },
+    {
+      "path": "config/5G/anchors.csv",
+      "sha256": "2b818ba6fe51e2bb7876ddff1dc3a8694f3f2f3e984ca30dc05181f91b04b65f",
+      "bytes": 126,
+      "line": 1
+    }
+  ]
+}

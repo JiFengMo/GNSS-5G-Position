@@ -19,6 +19,8 @@ JSONL 公共字段：`schema: 1`、`kind`、`run_id`、`time_ms`（Unix 毫秒�
 
 曲线结构：`curves.<name> = {x: [...], y: [...], original_points: N}`。x 是原采样点/子载波/CIR 索引；y 为线性幅值、相位 rad 或相关功率。非有限值写成 null，不跨缺失点连线。`pss_*`、`cir_magnitude` 在展示压缩时保留分桶最大值的原坐标；相关阈值判定仍使用原算法完整数据。
 
+SSB 的 CIR 使用 240 点逆变换，格点间隔是 `1/(240×SCS)` 秒，不是接收采样周期。新记录的 `cir_bin_width_ns` 显式记录此间隔；历史记录缺失时显示未知。兼容字段 `cir_peak_sample` 和 `fractional_offset_samp` 分别仍表示 CIR 峰索引及小数 **CIR 格点**，不是接收采样点。`fractional_peak` 在 CIR 两端按循环邻点取值，横坐标延伸为峰索引±1，方便查看同一组三点插值。实际到达时间先将插值后的循环索引展开到有符号半周期，再按格点间隔和实际接收采样率换算；旧记录只读回看不会重新计算，也不会自动修正历史时延。
+
 `dropped` 是监看队列竞争/容量造成的累计跳过次数，和 `rx_gaps`、`sync_dropped`、`ring_overruns` 分开。`io_errors` 记录写入错误；写入失败时接收继续、记录停止增长，页面随后显示数据过期。
 
 `/api/state.position` 预留契约：

@@ -489,7 +489,7 @@ int nr_ssb_build_cir(const nr_chest_full_t *hf, nr_cir_t *cir)
   float max_mag = 0.0f;
   float mean_mag = 0.0f;
 
-  if (!hf || !hf->h_full || !cir) {
+  if (!hf || !hf->h_full || !cir || hf->n_re < NR_SSB_TOTAL_RE) {
     return -1;
   }
 
@@ -530,6 +530,9 @@ int nr_ssb_build_cir(const nr_chest_full_t *hf, nr_cir_t *cir)
   cir->cir = tls_cir;
   cir->cir_len = NR_SSB_RE_COLS;
   cir->os_factor = 1U;
+  /* A 240-point IDFT over subcarriers spaced by SCS has this delay grid,
+   * regardless of the receiver's sampling rate or OFDM FFT size. */
+  cir->bin_width_s = 1.0 / ((double)NR_SSB_RE_COLS * 1000.0 * nr_v0_get_ssb_scs_khz());
   cir->peak_metric = max_mag / ((mean_mag / (float)NR_SSB_RE_COLS) + 1.0e-6f);
   return 0;
 }

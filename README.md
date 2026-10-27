@@ -74,7 +74,7 @@ ctest --preset radio
 
 也可直接运行 `cmake -S . -B build/offline -DBDS5G_BUILD_RADIO=OFF`。默认只构建 5G；`BDS5G_BUILD_GNSS` 和 `BDS5G_BUILD_FUSION` 默认均为 OFF。
 
-输出位于 `build/<预设名>/src/5G/`：`nr-config-check`、`replay_toa_iq`、8 个测试程序；radio 预设额外生成 `nr-toa-uesoftmodem` 和 `nr-ssb-anchor`。找到 Python 3.9+ 时还会注册 UI 服务测试。Windows/MinGW 仅用于离线验证，在线设备链路以 Linux 为准。
+输出位于 `build/<预设名>/src/5G/`：`nr-config-check`、`replay_toa_iq`、9 个测试程序；radio 预设额外生成 `nr-toa-uesoftmodem` 和 `nr-ssb-anchor`。找到 Python 3.9+ 时还会注册 UI 服务测试。Windows/MinGW 仅用于离线验证，在线设备链路以 Linux 为准。
 
 ## 配置与运行
 
@@ -125,6 +125,8 @@ UI 与接收程序运行在同一台 Linux 电脑，共用一个主配置。UI �
 ```bash
 sh run_5G_only.sh
 ```
+
+只采集原始 IQ 使用 `sh run_5G_only.sh --capture-iq`，专用配置为 [config/5G/iq_capture.f](config/5G/iq_capture.f)，默认 n1/PCI84 场景、3 秒、约 368.64 MB；先用 `sh run_5G_only.sh --capture-iq --check` 检查配置和空间。该模式直接调用 UHD 的 RX 接口，不解调、不启动 UI，输出 IQ、实际参数、逐块硬件时间与完整性状态。详情见 [原始 IQ 采集](src/5G/docs/raw_iq_capture.md)。
 
 脚本自动读取主配置、按 `radio` 预设增量编译（最多两个并行编译任务）、检查接收配置并启动接收机和 UI。请在本机浏览器打开脚本打印的地址，默认 <http://127.0.0.1:8765>。按 Ctrl+C 停止本次启动的两个进程；任一进程退出时脚本也会停止另一个。终端日志保存在 `log/launcher/<时间>-<进程号>/`，其中 `receiver.log` 为接收输出，`ui.log` 为服务输出；监看记录仍在配置指定的目录。锚点发射程序仍需单独启动。
 

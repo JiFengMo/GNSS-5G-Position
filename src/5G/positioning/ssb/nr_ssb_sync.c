@@ -1077,9 +1077,11 @@ int nr_ssb_track_cfo(const nr_iq_block_t *blk, nr_sync_state_t *sync)
 int nr_ssb_track_timing(const nr_iq_block_t *blk, nr_sync_state_t *sync,
                         int *sample_shift)
 {
-  static const int deltas[] = {0, -1, 1, -2, 2};
+  /* Ordered, equally spaced coordinates are required by the parabola fit. */
+  static const int deltas[] = {-2, -1, 0, 1, 2};
   float metrics[sizeof(deltas) / sizeof(deltas[0])];
-  int best_idx = 0;
+  uint8_t valid[sizeof(deltas) / sizeof(deltas[0])] = {0};
+  int best_idx = 2; /* Keep the current window on a tie or missing data. */
   nr_ssb_grid_t grid;
   if (!blk || !sync || !sample_shift) {
     return -1;
@@ -1097,22 +1099,26 @@ int nr_ssb_track_timing(const nr_iq_block_t *blk, nr_sync_state_t *sync,
       }
       if (nr_ssb_pbch_prepare_frontend(&grid, sync->pci, sync->ssb_index, sync->pbch_dmrs_n_hf,
                                        &metrics[i], NULL, NULL, NULL) != 0) {
-        metrics[i] = 0.0f;
+        continue;
       }
-      if (metrics[i] > metrics[best_idx]) {
+      valid[i] = isfinite(metrics[i]) && metrics[i] > 0.0f;
+    }
+    for (uint32_t i = 0U; i < (sizeof(deltas) / sizeof(deltas[0])); i++) {
+      if (valid[i] && (!valid[best_idx] || metrics[i] > metrics[best_idx] ||
+          (metrics[i] == metrics[best_idx] && abs(deltas[i]) < abs(deltas[best_idx])))) {
         best_idx = (int)i;
       }
     }
-    *sample_shift = deltas[best_idx];
+    *sample_shift = valid[best_idx] ? deltas[best_idx] : 0;
     if (best_idx > 0 &&
         best_idx + 1 < (int)(sizeof(deltas) / sizeof(deltas[0])) &&
-        metrics[best_idx] > 0.0f) {
+        valid[best_idx] && valid[best_idx - 1] && valid[best_idx + 1]) {
       const float lm = metrics[best_idx - 1];
       const float cm = metrics[best_idx];
       const float rm = metrics[best_idx + 1];
       const float den = lm - 2.0f * cm + rm;
-      if (fabsf(den) > 1.0e-6f) {
-        const float frac = 0.5f * (lm - rm) / den;
+      if (den < -1.0e-6f) {
+        const float frac = fmaxf(-0.5f, fminf(0.5f, 0.5f * (lm - rm) / den));
         sync->frac_offset_samp = 0.70f * sync->frac_offset_samp + 0.30f * frac;
       } else {
         sync->frac_offset_samp *= 0.85f;

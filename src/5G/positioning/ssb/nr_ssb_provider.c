@@ -418,6 +418,7 @@ static int ssb_extract_meas(void *ctx, const nr_iq_block_t *blk,
   nr_cir_t cir;
   int peak_idx = 0;
   double frac = 0.0;
+  double delay_samp = 0.0;
 
   if (nr_ssb_extract_window(blk, sync, &win) != 0) {
     return -1;
@@ -442,7 +443,8 @@ static int ssb_extract_meas(void *ctx, const nr_iq_block_t *blk,
     return -1;
   }
   nr_monitor_cir(&cir, peak_idx, frac);
-  if (nr_toa_build_meas(sync, blk, peak_idx, frac, meas) != 0) {
+  if (nr_toa_cir_delay_samples(&cir, peak_idx, frac, blk->fs_hz, &delay_samp) != 0 ||
+      nr_toa_build_meas(sync, blk, delay_samp, meas) != 0) {
     return -1;
   }
   meas->peak_metric = cir.peak_metric;

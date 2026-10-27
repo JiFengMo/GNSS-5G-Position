@@ -13,7 +13,7 @@
 
 ## 为什么 5G 有很多文件
 
-`config/5G/` 共 26 份 `.f` 和 1 份 `anchors.csv`，来源已按 Git 基线逐个核对：
+`config/5G/` 原有 26 份 `.f` 和 1 份 `anchors.csv`，来源已按 Git 基线逐个核对；现另增加 1 份独立原始采集配置 `iq_capture.f`，由 `sh run_5G_only.sh --capture-iq` 使用，不能作为普通 `nr_config` 接收子配置。原有配置来源如下：
 
 - **23 份迁移配置**：在 `14802df` 已存在于 `5G/targets/PROJECTS/NR-TOA/CONF/`，原扩展名为 `.conf`。`f9c0fd1`（2026-10-20）整理时改名迁入，主要是此前不同频点、采样率、增益、USB 条件的调试变体。下面未特别标记的 `.f` 均属这一类。
 - **2 份整理时新增**：`ue.toa.ssb.usrpb210.local3600.txrx.f` 和 `ue.toa.ssb.usrpb210.oai_n78_pci0_arfcn641280.f` 首次出现在 `f9c0fd1`，属于新增场景参数，不能称为从旧版本继承的实测配置。

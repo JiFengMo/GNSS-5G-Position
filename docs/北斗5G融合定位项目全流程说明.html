@@ -1,0 +1,4068 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>北斗与5G融合定位项目全流程说明</title><style>
+:root{color-scheme:light}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:#20252b;background:#f5f6f8;font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:16px;line-height:1.85}nav{position:fixed;inset:0 auto 0 0;width:276px;overflow:auto;background:#fff;border-right:1px solid #d9dfe6;padding:24px 18px}nav strong{display:block;margin-bottom:16px;color:#172536}nav a{display:block;padding:6px 8px;color:#405366;font-size:13px;line-height:1.5;text-decoration:none;border-radius:4px}nav a:hover{background:#edf2f7;color:#172536}main{margin:28px 36px 60px 310px;max-width:1100px;padding:44px 56px;background:white;box-shadow:0 3px 18px #1725360b}h1,h2,h3{color:#000;line-height:1.45;scroll-margin-top:24px}h1{font-size:30px;margin:0 0 26px}h2{font-size:24px;margin:52px 0 20px}h3{font-size:18px;margin:32px 0 14px}p{margin:14px 0}table{border-collapse:collapse;width:100%;margin:22px 0;font-size:13px;line-height:1.65;table-layout:auto}th,td{border:1px solid #d9d9d9;padding:11px 13px;vertical-align:middle;overflow-wrap:anywhere}th{background:#dce8f2;color:#000;text-align:left}tr:nth-child(even) td{background:#f7f9fb}code{font-family:Consolas,"Microsoft YaHei",monospace;font-size:.88em;overflow-wrap:anywhere}p code,td code{background:#f2f4f7;padding:1px 4px;border-radius:3px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fa;border:1px solid #e1e5ea;padding:18px 20px;line-height:1.65;font-size:13px;margin:22px 0}pre code{font-size:inherit}a{color:#285c8b}.toplink{position:fixed;bottom:22px;right:24px;background:#233a50;color:white;padding:8px 14px;border-radius:6px;text-decoration:none;font-size:13px}
+@media(max-width:1000px){nav{position:static;width:auto;max-height:240px;border-right:0;border-bottom:1px solid #d9dfe6}main{margin:16px;padding:24px;max-width:none}h1{font-size:25px}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+@media print{body{background:#fff;font-size:10.5pt;line-height:1.6}nav,.toplink{display:none}main{margin:0;padding:0;max-width:none;box-shadow:none}h1{font-size:23pt}h2{font-size:17pt;margin-top:26pt}h3{font-size:13pt}h1,h2,h3{break-after:avoid}p{orphans:3;widows:3}table{font-size:8pt}th,td{padding:6pt}thead{display:table-header-group}tr{break-inside:avoid}pre{font-size:8pt;white-space:pre-wrap}a{color:inherit;text-decoration:none}@page{size:A4;margin:18mm 16mm}}
+h1,h2,h3,p{overflow-wrap:anywhere}.parameters{table-layout:fixed}</style></head><body><nav><strong>项目流程说明</strong><a href="#section-2">1 项目目标与当前完成程度</a><a href="#section-6">2 工程组成与模块职责</a><a href="#section-7">3 数据流与处理时序</a><a href="#section-12">4 环境与构建流程</a><a href="#section-15">5 配置机制与参数生效规则</a><a href="#section-19">6 5G 射频参数与场景配置</a><a href="#section-23">7 5G 同步与测时算法</a><a href="#section-33">8 5G 锚点与 PRS 的真实实现范围</a><a href="#section-37">9 北斗 B1C 信号和输入约定</a><a href="#section-41">10 北斗捕获算法</a><a href="#section-46">11 北斗连续跟踪算法</a><a href="#section-52">12 北斗导航电文与星历</a><a href="#section-57">13 北斗伪距与单点定位</a><a href="#section-64">14 北斗 B210 在线接收参数与调度</a><a href="#section-69">15 时间体系与坐标体系</a><a href="#section-70">16 离线融合 WLS</a><a href="#section-76">17 网页与记录流程</a><a href="#section-81">18 实验运行操作流程</a><a href="#section-87">19 已有验证结果与证据解释</a><a href="#section-92">20 故障定位与排查顺序</a><a href="#section-93">21 后续推进与实验验收</a><a href="#section-94">22 实验归档与复现要求</a><a href="#section-95">23 关键术语与读数</a><a href="#section-96">24 源码与说明索引</a><a href="#section-97">附录A 当前配置文件完整显式参数快照</a><a href="#section-130">附录B MATLAB基线与逐层对照复现</a><a href="#section-134">附录C 核心源码定位与文件身份</a></nav><main><h1 id="section-1">北斗与5G融合定位项目全流程说明</h1>
+<p>项目：ToA_5G　整理日期：2026年10月22日</p>
+<p>本文面向项目开发、实验操作和后续交接，说明从射频采样、信号处理、时间与坐标建模，到定位解算、网页监看和验证归档的完整流程。算法说明对应当前仓库实现，参数同时区分配置文件显式值、程序缺省值和离线参考实验值。后文命令均在项目根目录的 Linux 或 WSL 终端执行；命令中的真实 IQ 路径、设备序列号和实验输出名称需按实际填写。</p>
+<p>项目当前已经形成两条独立信号处理链：5G 以 SSB 同步、PBCH/MIB 解码和相对时延监看为主；北斗 B1C 已形成捕获、连续跟踪、电文、星历、伪距和单点定位链，并增加了 B210 实采入口。融合目录提供双系统独立钟差的离线鲁棒 WLS。PRS、5G 独立三维定位和双设备在线融合尚未形成可直接验收的完整闭环。</p>
+<h2 id="section-2">1 项目目标与当前完成程度</h2>
+<h3 id="section-3">1.1 总体目标</h3>
+<p>用 USRP 接收北斗 B1C 和 5G NR 信号，从北斗提取卫星伪距，从 5G 提取基站时间观测，在统一接收历元、坐标和时间约定下估计接收机位置。北斗提供卫星轨道与广域定位约束，地面 5G 锚点作为另一类距离约束。两路接收机或两种系统可能具有不同的时间偏差，因此融合模型保留两个独立接收钟差。</p>
+<p>完整目标流程为：射频与时钟准备 → UHD 硬件采样 → IQ 连续性检查 → 北斗/5G 各自同步跟踪 → 观测有效性检查 → 同历元对齐与坐标转换 → 独立钟差 WLS → 定位质量检查 → 记录和界面展示。当前程序实际运行时，北斗与 5G 分别启动，主配置中的融合开关尚不承担统一调度。</p>
+<h3 id="section-4">1.2 能力状态矩阵</h3>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>当前实现</th>
+<th>验证边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>5G UHD 收样与 SSB 同步</td>
+<td>已实现，含 PSS、SSS、频偏与 PBCH/MIB</td>
+<td>有离线测试与监看接口，持续射频性能需目标机验收</td>
+</tr>
+<tr>
+<td>5G 信道和 CIR 时延</td>
+<td>已实现 LS、插值、CIR 峰与分数插值</td>
+<td>相对时延可诊断，绝对测距还涉及发射时刻、尺度和硬件标定</td>
+</tr>
+<tr>
+<td>5G PRS</td>
+<td>配置和 provider 接口存在，提取/信道/TOA 文件为 stub</td>
+<td>不能作为完整 PRS 接收或测距成果</td>
+</tr>
+<tr>
+<td>5G 独立位置解算</td>
+<td>建方程和 WLS 入口仍为占位</td>
+<td>当前解算器固定输出 valid=0</td>
+</tr>
+<tr>
+<td>5G 锚点发射</td>
+<td>有 UHD 定时发射、日志与测试信号生成入口</td>
+<td>网格构造及身份映射仍有简化，不能直接视为标准多锚点系统</td>
+</tr>
+<tr>
+<td>北斗 B1C 码和捕获</td>
+<td>PRN 1至63，数据与导频联合窄带捕获</td>
+<td>码与采样副本已对照 MATLAB</td>
+</tr>
+<tr>
+<td>北斗连续跟踪</td>
+<td>多通道 DLL/PLL、质量门限、失锁与重捕获</td>
+<td>真实 18 Msps 记录已对照；在线吞吐需实测</td>
+</tr>
+<tr>
+<td>北斗电文与星历</td>
+<td>子码同步、BCH 检查、解交织、双 CRC、字段解析</td>
+<td>未实现 LDPC 纠错，严格硬判决同步</td>
+</tr>
+<tr>
+<td>北斗单点定位</td>
+<td>MEO/IGSO 轨道与钟差、公共采样伪距、四状态 SPP</td>
+<td>MEO 有真实记录；IGSO 有构造参考向量；GEO 不支持</td>
+</tr>
+<tr>
+<td>北斗 B210 实采</td>
+<td>独立 RX 后端、有界队列、在线因果解算</td>
+<td>UHD 4.6 编译与替身测试通过，实物接收待验收</td>
+</tr>
+<tr>
+<td>北斗与5G融合</td>
+<td>独立 CSV 观测、适配器、鲁棒 WLS</td>
+<td>离线算法可运行，未自动汇入两条在线链</td>
+</tr>
+<tr>
+<td>网页</td>
+<td>只读监看、5G 回看、北斗实时与离线结果</td>
+<td>无网页设备控制；5G 位置展示仍预留</td>
+</tr>
+</tbody></table>
+<h3 id="section-5">1.3 当前工程与 FPGA 的关系</h3>
+<p>当前检出的主要工程是 Linux 主机侧 C/C++ SDR 软件，构建入口为 CMake。仓库说明将含硬件加速内容的旧版本保存在 <code>codex/fpga-preserved</code> 分支。当前流程不包含已经核验的 Vivado 工程、器件 part、XDC、HLS IP、XSA 或 PetaLinux 构建链。因此本说明不把软件处理流程改写成已完成的 FPGA 实现，也不推定 Vivado/Vitis 版本。</p>
+<h2 id="section-6">2 工程组成与模块职责</h2>
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>职责</th>
+<th>主要输入和输出</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>config/config.f</code></td>
+<td>主配置路由</td>
+<td>子配置路径、模块预留开关</td>
+</tr>
+<tr>
+<td><code>config/5G/</code></td>
+<td>接收、锚点和实验场景配置</td>
+<td>射频参数、扫描目标、锚点表</td>
+</tr>
+<tr>
+<td><code>config/GNSS/</code></td>
+<td>北斗在线与离线任务</td>
+<td>B210 参数或 IQ 文件参数</td>
+</tr>
+<tr>
+<td><code>config/fusion/wls.f</code></td>
+<td>融合参数声明</td>
+<td>当前尚未加载到在线流程</td>
+</tr>
+<tr>
+<td><code>config/UI/monitor.f</code></td>
+<td>本机服务、监看与记录</td>
+<td>端口、轮询、场景和标定声明</td>
+</tr>
+<tr>
+<td><code>src/5G/app/</code></td>
+<td>接收与锚点入口</td>
+<td>IQ、同步状态、时延 CSV</td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/ssb/</code></td>
+<td>SSB 算法</td>
+<td>PSS/SSS/PBCH、信道、CIR、测量</td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/</code></td>
+<td>配置、缓存、调度、时钟、监看</td>
+<td>时间戳、队列、JSONL</td>
+</tr>
+<tr>
+<td><code>src/GNSS/bds_b1c/</code></td>
+<td>北斗数值核心</td>
+<td>码、捕获、跟踪、电文、轨道和定位</td>
+</tr>
+<tr>
+<td><code>src/GNSS/app/</code></td>
+<td>北斗离线 CLI</td>
+<td>IQ/CSV → 各阶段 CSV/JSON</td>
+</tr>
+<tr>
+<td><code>src/GNSS/live/</code></td>
+<td>北斗设备与实时处理</td>
+<td>UHD RX → 有界队列 → 核心算法</td>
+</tr>
+<tr>
+<td><code>src/GNSS/tools/</code></td>
+<td>MATLAB 基线、比较和绘图</td>
+<td>参考 MAT/CSV、差异报告</td>
+</tr>
+<tr>
+<td><code>src/fusion/</code></td>
+<td>统一观测和离线融合</td>
+<td>CSV → 双钟差位置 JSON</td>
+</tr>
+<tr>
+<td><code>ui/</code></td>
+<td>Python 本机服务和网页</td>
+<td>JSONL/SQLite → HTTP 只读展示</td>
+</tr>
+<tr>
+<td><code>log/</code></td>
+<td>实验产物</td>
+<td>设备日志、IQ、CSV、JSONL、索引</td>
+</tr>
+<tr>
+<td><code>build/</code></td>
+<td>编译与基线产物</td>
+<td>二进制、测试结果、参考对照</td>
+</tr>
+</tbody></table>
+<p>第三方组成包括 UHD、GNSS 捕获所需 FFTW3、线程与数学库，以及少量 OAI 派生接口和插值系数。该工程不编译整套 OAI 基站或终端。MATLAB 用于参考基线重建和核对，正常运行 C 接收机与网页不要求 MATLAB。</p>
+<h2 id="section-7">3 数据流与处理时序</h2>
+<h3 id="section-8">3.1 5G 路径</h3>
+<p>主配置选择接收子配置 → 配置解析与设备初始化 → 获取带硬件时间戳的 IQ → 环形缓存与同步任务队列 → 搜索 PSS → SSS 识别 PCI → PBCH DMRS 假设与 MIB 解码 → 进入跟踪 → 提取 SSB 网格 → LS 信道估计 → 插值平滑 → CIR → 整数峰与分数峰 → 相对时延 CSV 和监看 JSONL。</p>
+<p>只有真实 PBCH/MIB 解码且保持锁定时，SSB provider 才继续测量。同步任务与记录线程有各自容量和丢弃统计；网页冻结不影响采样和计算。</p>
+<h3 id="section-9">3.2 北斗离线路径</h3>
+<p>真实 IQ 文件 → 读取 20 ms 捕获窗口 → PRN/多普勒/码相位搜索 → <code>acquisition.csv</code> → 按各星种子连续跟踪 → 逐星 <code>prn_XX.csv</code> → 18 秒电文帧同步和校验 → <code>frames.csv</code> 与 <code>ephemerides.csv</code> → 公共采样历元构造伪距 → 卫星位置、钟差及 SPP → <code>solutions.csv</code>、<code>observations.csv</code>、<code>exclusions.csv</code> → 导入 SQLite → 网页回看。</p>
+<p>离线各阶段通过文件衔接，既可单独重跑，也可由 <code>run_BDS_only.sh --offline</code> 顺序调度。电文与定位阶段读取已有跟踪结果，不重复读取 IQ 做相关。</p>
+<h3 id="section-10">3.3 北斗在线路径</h3>
+<p>B210 → 独立 UHD C API RX 线程 → 硬件时间戳和连续样本编号 → 有界 IQ 队列 → DSP 线程 → 原有捕获/跟踪/电文/定位核心 → 实采 JSONL → Python 增量 reader → 网页。</p>
+<p>在线只使用在目标时刻之前已经收齐的完整有效电文。发生 overflow、队列丢弃或采样缺口时，连续段、帧时间锚点和本地接收钟状态必须重建；不能用断流前的完整帧立即恢复定位。</p>
+<h3 id="section-11">3.4 融合路径</h3>
+<p>当前入口是人工准备的一组统一观测 CSV → <code>bds5g-positioning</code> → 位置和双钟差 JSON。GNSS 定位输出并未自动转成融合 CSV；5G 在线测量也没有自动接入这个离线入口。时间分组、坐标转换和两套设备观测的对应关系须在进入求解器之前完成。</p>
+<h2 id="section-12">4 环境与构建流程</h2>
+<h3 id="section-13">4.1 运行环境</h3>
+<p>在线设备链路以 Linux 为主，WSL 用于 Linux 编译、配置核查和离线回归。Windows/MinGW 只作为离线验证环境，不能由 Windows 构建成功推断 USB 射频链可用。项目使用 C11；北斗在线部分还需要 C++17。使用预设需要 CMake 3.21 以上和 Ninja；普通 CMake 入口最低为 3.16。Python 服务要求 Python 3.9 以上。</p>
+<p>GNSS 构建需要 FFTW3；UHD 仅在对应在线目标启用时需要。典型 Ubuntu 依赖为 <code>build-essential cmake ninja-build pkg-config libfftw3-dev libuhd-dev python3</code>。先核对现有开发环境，再补齐缺失包。</p>
+<h3 id="section-14">4.2 预设选择</h3>
+<table>
+<thead>
+<tr>
+<th>预设</th>
+<th>5G</th>
+<th>5G UHD</th>
+<th>北斗</th>
+<th>北斗 UHD</th>
+<th>融合</th>
+<th>典型用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>offline</code></td>
+<td>开</td>
+<td>关</td>
+<td>关</td>
+<td>关</td>
+<td>关</td>
+<td>5G 离线算法与 IQ 回放</td>
+</tr>
+<tr>
+<td><code>radio</code></td>
+<td>开</td>
+<td>开</td>
+<td>关</td>
+<td>关</td>
+<td>关</td>
+<td>5G 接收机与锚点</td>
+</tr>
+<tr>
+<td><code>all-offline</code></td>
+<td>开</td>
+<td>关</td>
+<td>开</td>
+<td>关</td>
+<td>开</td>
+<td>全部离线算法与回归</td>
+</tr>
+<tr>
+<td><code>gnss-offline</code></td>
+<td>关</td>
+<td>关</td>
+<td>开</td>
+<td>关</td>
+<td>关</td>
+<td>北斗文件处理</td>
+</tr>
+<tr>
+<td><code>gnss-radio</code></td>
+<td>关</td>
+<td>关</td>
+<td>开</td>
+<td>开</td>
+<td>关</td>
+<td>北斗 B210 实采</td>
+</tr>
+</tbody></table>
+<p>根 CMake 选项与预设需要分开理解：<code>BDS5G_BUILD_RADIO</code> 的原始 option 缺省为 ON，但 <code>offline</code> 预设显式将其关闭。GNSS 和融合缺省 OFF。构建目录由预设隔离，不要混用 Windows 与 Linux 生成物。</p>
+<pre><code class="language-bash">cmake --preset all-offline
+cmake --build --preset all-offline --parallel 2
+ctest --preset all-offline
+</code></pre>
+<p>上述命令配置、编译并测试离线工程。输出在 <code>build/all-offline/</code>，其中 5G、GNSS、融合程序分别在 <code>src/5G/</code>、<code>src/GNSS/</code>、<code>src/fusion/</code> 下。下一步先执行配置检查，再按单系统流程运行。</p>
+<h2 id="section-15">5 配置机制与参数生效规则</h2>
+<h3 id="section-16">5.1 主配置</h3>
+<table>
+<thead>
+<tr>
+<th>配置项</th>
+<th>当前值</th>
+<th>实际意义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enable_5g</code></td>
+<td>1</td>
+<td>5G 程序启动门限</td>
+</tr>
+<tr>
+<td><code>nr_config</code></td>
+<td><code>5G/ue.toa.ssb.usrpb210.f</code></td>
+<td>当前 5G 接收配置，3.6 GHz</td>
+</tr>
+<tr>
+<td><code>nr_anchor_config</code></td>
+<td><code>5G/anchor0.ssb.usrpb210.f</code></td>
+<td>独立锚点程序读取</td>
+</tr>
+<tr>
+<td><code>gnss_config</code></td>
+<td><code>GNSS/bds_b1c.f</code></td>
+<td>独立北斗在线脚本读取</td>
+</tr>
+<tr>
+<td><code>enable_gnss</code></td>
+<td>0</td>
+<td>统一调度预留，不阻止独立北斗脚本</td>
+</tr>
+<tr>
+<td><code>enable_fusion</code></td>
+<td>0</td>
+<td>预留，不会启动融合程序</td>
+</tr>
+<tr>
+<td><code>fusion_config</code></td>
+<td><code>fusion/wls.f</code></td>
+<td>预留参数路径</td>
+</tr>
+<tr>
+<td><code>ui_config</code></td>
+<td><code>UI/monitor.f</code></td>
+<td>网页与监看参数</td>
+</tr>
+</tbody></table>
+<p>主配置引用的子配置相对于主配置目录；5G 子配置内 <code>anchor_db_path</code> 相对于该子配置目录。北斗离线任务 <code>input_file</code> 的相对路径则以工程根目录为基准。监看目录相对于工程 <code>log/</code>。这三种路径规则不能互相套用。</p>
+<p>主配置路由层会检查未知项、重复项及缺失运行入口；5G 子配置解析器则仍有忽略未知项的兼容行为。因此字段拼错未必会在子配置层报错，应同时检查已加载快照。赋值使用整行 <code>#</code> 注释，避免把注释写到数值行末。</p>
+<h3 id="section-17">5.2 修改后如何生效</h3>
+<p>修改既有 <code>.f</code> 值或 <code>anchors.csv</code> 后通常无需重新编译，但要停止并重新启动受影响程序。修改 C/C++、头文件、CMake 或增加新的解析字段需要重编译。修改 Python 要重启服务；修改网页 HTML/CSS/JS 通常刷新即可。磁盘当前配置和程序启动时加载的配置可能不同，实验追溯以已加载快照为准。</p>
+<h3 id="section-18">5.3 参数调整顺序</h3>
+<p>先固定真实设备与数据格式，再固定采样率、中频和中心频点；然后确定信号搜索范围、目标身份和时钟来源；最后调整增益、环路和记录频率。每次实验尽量只改变一个类别，保存原配置、副本、日志和结果，便于区分射频变化、同步变化和显示变化。</p>
+<h2 id="section-19">6 5G 射频参数与场景配置</h2>
+<h3 id="section-20">6.1 当前默认接收配置</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>作用和注意事项</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td>usrp</td>
+<td>当前 UHD 后端；Lime 接口未完成</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td>serial=2512531</td>
+<td>当前配置固定设备身份，换机必须核对</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td>3600000000</td>
+<td>3.6 GHz 接收中心</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td>30720000</td>
+<td>请求 30.72 Msps，实验还应记录设备实际速率</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td>30</td>
+<td>接收增益，按实际输入幅度调整</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td>0</td>
+<td>接收实验中不是发射使能开关</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td>internal</td>
+<td>默认文件没有选择外部 10 MHz</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td>internal</td>
+<td>默认文件没有选择外部 PPS</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td>SSB_TOA</td>
+<td>选择 SSB provider</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td>anchors.csv</td>
+<td>当前锚点表路径</td>
+</tr>
+</tbody></table>
+<p>以下是未在默认文件中显式填写、由解析器提供的重要缺省值：<code>ssb_period_ms=20</code>、<code>full_band_sweep=1</code>、<code>strict_center_freq=0</code>、<code>gain_sweep_enable=1</code>、<code>target_pci=-1</code>、<code>target_ssb_index=-1</code>、<code>ssb_scs_khz=0</code>、<code>meas_mode=MEAS_ONLY</code>、<code>iq_dump_enable=0</code>。所以仅看默认文件的 3.6 GHz 一项，不能认为它一定严格固定频点且禁止增益扫描。</p>
+<h3 id="section-21">6.2 PCI84 精细实验配置</h3>
+<p><code>ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f</code> 显式选择 2,114,550,000 Hz、30.72 Msps、64 dB 增益、PCI84、15 kHz SSB SCS、20 ms 周期、band1。它关闭全频段与增益扫描，启用严格中心频率和候选 IQ 导出，时钟与时间来源仍为 internal。该文件是特定实验场景，不能把其中频点、增益或 PCI 当成所有环境的默认正确值。</p>
+<h3 id="section-22">6.3 其他解析字段</h3>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>scan_targets</code></td>
+<td>多个频点和可选 PCI，格式可为 <code>频率@PCI</code>，逗号或分号分隔</td>
+</tr>
+<tr>
+<td><code>nr_band</code></td>
+<td>NR 频段提示，影响搜索与时域几何</td>
+</tr>
+<tr>
+<td><code>target_pci</code></td>
+<td>-1 为自动，否则 0至1007，限制候选</td>
+</tr>
+<tr>
+<td><code>target_ssb_index</code></td>
+<td>-1 为未指定，否则选择 SSB 索引</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td>实际处理关注 15/30 kHz，0 为自动逻辑</td>
+</tr>
+<tr>
+<td><code>ssb_freq_offset_hz</code></td>
+<td>SSB 相对接收中心的频移提示</td>
+</tr>
+<tr>
+<td><code>ssb_offset_subcarriers</code></td>
+<td>用子载波数描述 SSB 偏移，未设有内部哨兵值</td>
+</tr>
+<tr>
+<td><code>pbch_lmax</code></td>
+<td>解析器接受 0/4/8/64，但接受字段不等于所有分支已实测</td>
+</tr>
+<tr>
+<td><code>rx_antenna</code> 和 <code>tx_antenna</code></td>
+<td>UHD 端口名称</td>
+</tr>
+<tr>
+<td><code>rx_ant</code> 和 <code>tx_ant</code></td>
+<td>结构中的天线数量参数，当前具体后端能力另行检查</td>
+</tr>
+<tr>
+<td><code>provider</code></td>
+<td>provider 选择字段，与 mode 一并核对实际选择结果</td>
+</tr>
+<tr>
+<td><code>meas_mode</code></td>
+<td>MEAS_ONLY、PSEUDORANGE_ONLY、POSITION_SOLVE；选择定位并不会补齐占位解算器</td>
+</tr>
+<tr>
+<td><code>trace_enable</code> 和 <code>iq_dump_enable</code></td>
+<td>诊断功能；IQ 导出不是无限时长原始记录</td>
+</tr>
+</tbody></table>
+<p>附录逐份保留所有 5G 场景文件的显式赋值，便于比较 lowrate、usb2、usb3、fixed、sweep、multi-target 等变体。文件名只是场景标签，真正运行参数看文件内容和启动日志。</p>
+<h2 id="section-23">7 5G 同步与测时算法</h2>
+<h3 id="section-24">7.1 IQ 接收与任务调度</h3>
+<p>接收线程从 UHD 获取 IQ 和硬件采样时间戳，写入环形缓存，并维护绝对样本位置和间断计数。同步 actor 消费独立任务队列，结构默认深度 <code>NR_SYNC_Q_DEPTH=8</code>。队列丢弃、接收间断、环形缓存溢出和监看丢弃是不同的故障来源，不能合并成一个“丢包数”。</p>
+<p>采样块需要保留实际采样率、块首硬件时间、处理窗口位置、当前频率和目标 PCI。多频点搜索中的观测在不同时刻取得，不能仅因存入同一列表就视为同一定位历元。</p>
+<h3 id="section-25">7.2 PSS 粗同步与频偏</h3>
+<p>PSS 搜索对三个 NID2 本地参考做相关，获得候选时刻和相关指标。处理保留最多四个候选，再执行精同步与 PBCH 尝试。设定目标 PCI 时还会限制 NID2，并缩小 PBCH 尝试数量。</p>
+<p>SSB provider 的附加门限包括 PSS 指标至少 0.15、频偏绝对值小于 14,900 Hz，以及粗同步位置距输入边界至少约 16 样本。这些是当前源码常量，不是配置文件中的独立可调字段，也不能用于解释北斗捕获统计量。</p>
+<p>PSS 或循环前缀相关估计载波频偏后，在提取 OFDM 符号时补偿。频偏补偿的目的在于恢复子载波正交性，并提高 SSS、DMRS 和 PBCH 解码的可靠性；一个很高的相关峰本身仍不足以确认小区锁定。</p>
+<h3 id="section-26">7.3 SSS 与 PCI</h3>
+<p>SSS 搜索 NID1，并与 NID2 组合得到 <code>PCI=3×NID1+NID2</code>。精同步保留候选 PCI 与时序偏移，再供 PBCH 评估。指定 <code>target_pci</code> 会强制使用目标身份作为后续假设，因此“配置中写了 PCI84”不能替代真实 PBCH/MIB 校验成功。</p>
+<h3 id="section-27">7.4 PBCH DMRS 和 MIB</h3>
+<p>对 PCI、SSB 索引、半帧等假设生成 DMRS 参考，估计信道、噪声和公共相位，构造 PBCH 软信息并进行后续 BCH/CRC 解码。这里 PBCH 日志中的 BCH 指广播信道处理，不等同于北斗 BCH(21,6) 和 BCH(51,8) 的码字检查。</p>
+<p>解码成功后记录 SSB 索引、SFN、MIB payload 及其公共 SCS、SSB 子载波偏移、CORESET0 和 SearchSpace0 信息。工程还能计算 Type0 CSS、SIB1 接收计划等诊断，但不能据此认定已经完成完整商用网络接入、SIB1 全解码或可用的基站坐标获取。</p>
+<p>失败阶段会分别标为 window、demod、dmrs_weak、dmrs_ambig、bch_crc 等。应先依据失败阶段定位问题，再调整参数；不要仅靠提高增益反复尝试。</p>
+<h3 id="section-28">7.5 跟踪</h3>
+<p>锁定后根据已知 SSB 周期和样本时刻预测后续位置，更新 CFO 和时序。当前 CFO 跟踪中包含 <code>0.82×旧值+0.18×CP估计</code> 的平滑，以及基于 DMRS 公共相位的残余频偏修正，后者增益为 0.20。定时跟踪比较偏移候选 <code>{0,-1,+1,-2,+2}</code>，按指标选择整数移动并维护累计移位。</p>
+<p>这些系数属于当前源码实现。失锁后回到搜索，不应延续已经失效的 MIB 或把旧曲线当成最新完整处理链。</p>
+<h3 id="section-29">7.6 SSB 提取与 LS 信道估计</h3>
+<p>SSB 使用 4 个符号、每符号 240 个相对子载波的网格表示。参考资源包括 PSS、SSS 和 144 个 PBCH DMRS。已知导频 X 与接收资源 Y 的 LS 原理是用 Y 除以 X；实现利用本地参考的共轭约定完成复数乘法，并加入小量防止除零。接收参考与发射参考的共轭方向必须一致。</p>
+<p>测时支路先在已知资源上得到信道，再在每个符号内补齐子载波，最后沿符号方向做 0.25、0.5、0.25 的平滑并在边界归一化。PBCH 软解调前端另使用 OAI 的 16 点插值滤波系数；这与测时支路的一般插值不是同一个处理函数。</p>
+<h3 id="section-30">7.7 CIR 和亚栅格峰值</h3>
+<p>当前 <code>nr_ssb_build_cir()</code> 把四个符号的信道平均，对 240 个频域点计算 240 点逆变换，输出 <code>cir_len=240</code>、<code>os_factor=1</code>。它没有在这里执行可配置的高倍率零填充。峰值指标是最大幅值除以平均幅值，随后质量映射为 <code>min(peak_metric/8,1)</code>，低于或等于 1 时给零质量；这些量不是已标定距离标准差。</p>
+<p>整数峰取 CIR 幅值的全局最大点。设左、中、右幅值为 yL、yC、yR，三点抛物线插值的实现表达式为：</p>
+<pre><code class="language-text">frac = 0.5 * (yL - yR) / (yL - 2*yC + yR)
+</code></pre>
+<p>分数修正限制在 -0.5至+0.5；边界峰、点数不足或分母过小时取 0。全局最强峰不保证是最早直达径，多径下可能出现偏差。分数插值提高峰位置表达的细度，不会自动补回信号有效带宽或消除多径。</p>
+<h3 id="section-31">7.8 当前测量拼接和绝对 TOA 边界</h3>
+<p>当前函数按下式构造接收位置：</p>
+<pre><code class="language-text">rx_arrival = block_timestamp + coarse_offset
+             + cumulative_tracking_shift + peak_index + frac
+relative_delay_ns = (rx_arrival - block_timestamp) * 1e9 / Fs
+toa_ns = (rx_arrival - tx_timestamp) * 1e9 / Fs
+range_m = toa_ns * 1e-9 * 299792458
+</code></pre>
+<p>前两项是代码的当前定义。相对时延以当前处理窗口为参考，不是传播时延。绝对 TOA 还要求 TX 时间与 RX 时间属于同一已验证时间体系，并配对同一次发射事件，扣除硬件链路延迟。</p>
+<p>源码核查有两个需要独立验收的接口问题。第一，当前 240 点 CIR 的索引被测量构造函数直接加入原始采样计数；对占用带宽的逆变换，延迟栅格原则上与变换点数和子载波间隔有关，因此需要核对 CIR 栅格到 ADC 样本域的转换与符号起点偏置，不能直接把当前显示数值当作已标定纳秒。第二，<code>nr_toa_get_last_tx_timestamp()</code> 读取的是 <code>nr_anchor_write.c</code> 的进程内静态变量；单独启动锚点与接收机不会共享这个变量，当前接收入口没有从 <code>tx_event.csv</code> 自动导入配对时间。因此分别启动两个程序并不形成绝对测距闭环。</p>
+<p>上述判断来自当前函数调用和存储方式，是接口核查结论，不是本次新增的射频测量结果。本次文档整理未修改算法。工程应先补齐发射事件传递、同源配对、时间尺度和延迟标定，再验收绝对距离。</p>
+<h3 id="section-32">7.9 时延统计的解释</h3>
+<p>相对时延 CSV 保留接收块时间、到达位置、分数峰、相对样本数/纳秒、滑动均值、jitter、PCI、SSB、CFO、SNR、峰指标、质量和 MIB。jitter 是当前滑动窗内按 N 分母计算的标准差。不同 PCI、频点、窗口起点或重锁段不应无条件混在一起分析；滑动稳定不等于绝对误差很小。</p>
+<p>30.72 Msps 下一个原始采样间隔约 32.552 ns，对应光程约 9.759 m；4.092 Msps 下约 244.379 ns，对应约 73.263 m。这只是原始采样尺度示例，最终估计精度受有效信号带宽、信噪比、同步、模型和标定影响，不能用原始采样间隔直接给出最终精度结论。</p>
+<h2 id="section-33">8 5G 锚点与 PRS 的真实实现范围</h2>
+<h3 id="section-34">8.1 锚点配置和发射流程</h3>
+<p>默认 anchor0 请求 3.6 GHz、30.72 Msps、外部参考和 PPS、40 dB TX 增益。程序等待时钟状态，设置下个 PPS 时间原点，计算周期样本数，在当前硬件时间之后提前排定 burst，写 UHD 并生成 <code>log/tx_event.csv</code>。默认周期来自 20 ms 缺省值。当前调度使用查询硬件当前时间再加 lead 的方式，不是已经证明长期严格锁定公共 epoch 栅格的多锚点调度。</p>
+<p><code>anchors.csv</code> 目前包含两个示例：anchor0/PCI42/SSB0 位于 (0,0,3) m，anchor1/PCI43/SSB0 位于 (20,0,3) m，absolute_time_valid 为 1、硬件延迟为 0。它们是示例几何和声明，不能据此认为硬件时延已经标定为零。坐标看起来是局部实验坐标，不能直接当作融合 ECEF 输入。</p>
+<h3 id="section-35">8.2 波形与身份映射限制</h3>
+<p>当前 <code>nr_ssb_build_tx_plan()</code> 把 anchor_id、PCI 和 SSB index 初始化为 0；网格构造函数返回 valid=0；OFDM 生成入口调用固定参数 <code>nr_v0_ssb_build_burst_iq(0,1,...)</code>。因此锚点 CSV 的 PCI42/43 与波形/计划没有形成已核验的自动映射。发射日志能够生成，不等于两个锚点已发出正确身份的标准可定位 SSB。</p>
+<p>需要逐项核对发射身份、PBCH/MIB、周期、绝对时刻和接收侧识别结果，才能把该入口从测试信标推进到受控定位锚点。当前代码保留了通道和计划接口，适合后续补齐，但不应越过这些步骤解释结果。</p>
+<h3 id="section-36">8.3 PRS 与 5G 位置模块</h3>
+<p>PRS provider 当前 acquire/track 会直接把 locked 设为 1，extract_meas 以零峰偏移调用通用测量构造；三个 PRS 算法文件分别为 stub。<code>test_prs_toa</code> 仅引用 provider 并返回成功，不能证明 PRS 波形处理正确。</p>
+<p>5G 的 <code>nr_pos_build_equations()</code> 只清空输入，<code>nr_pos_solve_wls()</code> 清空输出并设置 valid=0；其测试只验证入口可调用。<code>nr_meas_assoc_anchor()</code> 也未实际匹配 PCI/SSB，当前直接返回 0。历元管理器只是收集缓存再弹出，尚不是严格按公共时刻进行多锚点插值配对。与此相对，<code>src/fusion/solver/fusion_wls.c</code> 才是另一个实际实现的离线 WLS，不要混淆同名概念。</p>
+<h2 id="section-37">9 北斗 B1C 信号和输入约定</h2>
+<h3 id="section-38">9.1 信号模型</h3>
+<p>当前实现支持 PRN1至63 的数据主码、导频主码和导频子码。主码长 10230 码片，码率 1.023 Mcps，周期 10 ms；导频子码长 1800，每主码周期一个子码符号，总周期 18 s。二进制 0 映射为 +1、1 映射为 -1。</p>
+<p>本地副本采用窄带 BOC(1,1) 数据/导频联合处理，沿用 CU-SDR 路径；不是完整宽带 QMBOC 接收。射频中心为 1575.42 MHz，数据路和导频路按其相位关系处理。码生成、采样副本与相关器符号约定必须保持一致。</p>
+<h3 id="section-39">9.2 在线与离线参数不能混用</h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>当前在线 B210</th>
+<th>真实离线参考文件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>RF 中心</td>
+<td>1575.42 MHz</td>
+<td>文件参数不直接给 RF 调谐</td>
+</tr>
+<tr>
+<td>IQ 采样率</td>
+<td>请求 4.092 Msps，使用实际回读值</td>
+<td>18 Msps</td>
+</tr>
+<tr>
+<td>残余 IF</td>
+<td>0 Hz</td>
+<td>+20,000 Hz</td>
+</tr>
+<tr>
+<td>主机数据</td>
+<td>fc32，I/Q 各 float32</td>
+<td>ci8，I/Q 各 int8</td>
+</tr>
+<tr>
+<td>UHD 线上数据</td>
+<td>sc16</td>
+<td>不适用</td>
+</tr>
+<tr>
+<td>输入来源</td>
+<td>RX 连续流</td>
+<td><code>L1_IF20KHz_FS18MHz.bin</code></td>
+</tr>
+</tbody></table>
+<p>ci8 每个复数样本 2 字节；cf32 每个复数样本 8 字节，离线按小端 float32 读取。<code>skip-samples</code>、<code>absolute_sample</code> 和码相位样本数均指复数样本，不是字节。若把 ci8 当 cf32 读取，即使程序没有立即退出，得到的幅相和时间也没有正确物理意义。</p>
+<h3 id="section-40">9.3 本地码采样</h3>
+<p>采样副本沿用 MATLAB 右端点 ceil 索引约定，包含其浮点取整行为，便于逐样本对照。在 18 Msps 下每个 10 ms 主码周期名义上有 180000 个复数样本，20 ms 捕获窗口有 360000 个。4.092 Msps 下对应 40920 和 81840 个。连续跟踪的每历元实际样本数由残余码相位和瞬时码率决定，不应强制每行都等长。</p>
+<h2 id="section-41">10 北斗捕获算法</h2>
+<h3 id="section-42">10.1 搜索空间</h3>
+<p>捕获同时搜索 PRN、多普勒和码相位。离线参考默认为 PRN1至63、多普勒 -5000至+5000 Hz、粗步长 50 Hz、细步长 25 Hz、10 ms 相干积分、统计量门限 10。当前在线配置改为 -8000至+8000 Hz、粗步长 250 Hz、细步长 25 Hz，积分和门限不变。这是两套不同搜索参数。</p>
+<p>在线粗搜索共 65 个频点，离线 50 Hz 粗搜索为 201 个频点。扩大频率范围或缩小粗步长都会增加计算量；提高粗步长也可能改变低信噪比条件下的捕获结果，应以独立验收而不是仅以速度决定参数。</p>
+<h3 id="section-43">10.2 相关与归一化</h3>
+<p>读取连续 20 ms，默认以 10 ms 有效积分和补零 FFT 进行相关，覆盖整个码相位。粗步长恰好对齐 FFT 频率栅格时复用信号 FFT；不对齐时逐频点混频再 FFT。多个 PRN 复用工作空间，不保存完整二维搜索矩阵。</p>
+<p>数据与导频的联合幅值统计量采用下面的代码等价表达式：</p>
+<pre><code class="language-text">joint = (sqrt(11)*abs(Rdata) + sqrt(29)*abs(Rpilot)) / sqrt(40)
+metric = joint / sqrt(var(IQ[0:Ncoh]) * Ncoh)
+acquired = metric &gt; threshold
+</code></pre>
+<p>方差用 N-1 分母。该统计量既不是 CIR 峰均比，也不是 C/N0。0 Hz 频率可以是合法结果，不能以频率是否非零代替 acquired 判决。</p>
+<h3 id="section-44">10.3 精细频率与码周期模糊</h3>
+<p>获得粗峰后将相关滞后折叠到一个 10 ms 主码周期，从原始连续 IQ 截取精搜区间，在粗频点附近正负一个粗步长内搜索细频率；可能略超出粗搜索边界。<code>carrier_hz=IF+doppler_hz</code>。捕获的 <code>code_phase_samples</code> 是输入窗口内、周期折叠后的零起始码相位，没有绝对发射时刻，不能直接乘光速形成距离。</p>
+<p>离线 CLI 支持 1至10 ms 积分，但连续跟踪和电文链使用完整 10 ms。参数要求上下界差是粗步长整数倍、细步长整除粗步长。采样率边界为 2.046至100 Msps，在线对硬件回读微小误差另有容许范围。</p>
+<h3 id="section-45">10.4 输出和退出状态</h3>
+<p>捕获 CSV 包括 PRN、acquired、carrier_hz、doppler_hz、coarse_doppler_hz、code_phase_samples、input_start_sample、peak_metric、fine_metric。捕获阶段 <code>cn0_db_hz</code> 为 NaN，不输出伪造载噪比。返回 0 表示有捕获；7 表示正常完成但无捕获；2 为参数错误；3 为文件/内存错误；6 为算法参数或输入无效。</p>
+<h2 id="section-46">11 北斗连续跟踪算法</h2>
+<h3 id="section-47">11.1 初始化与相关器</h3>
+<p>捕获结果给每星提供起始样本、载波频率和码相位。初始码率利用载波多普勒辅助：在 1.023 Mcps 基准上加入 <code>doppler/1575.42MHz×1.023Mcps</code>。每通道维护码 NCO、载波 NCO、残余相位和完整 64 位样本计数。</p>
+<p>每个主码周期分别积累数据与导频的 Early、Prompt、Late 复相关，E/P 和 P/L 各偏移 0.06 个主码码片。数据/导频使用参考的 11:29 联合鉴别器权重。Prompt 输出既用于质量检查，也用于后续电文符号判断。</p>
+<h3 id="section-48">11.2 DLL 和 PLL</h3>
+<p>二阶 DLL 默认带宽 1 Hz、阻尼 0.7，按码误差更新码 NCO。三阶 PLL 默认 18 Hz，使用对符号翻转不敏感的 Costas 鉴别器；导频按相对数据路的正交关系处理，避免数据位或导频子码翻转被误判为 180 度载波误差。环路跨周期保留残余相位，不把每个块都当作新信号。</p>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>缺省值</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>dll_bandwidth_hz</code></td>
+<td>1 Hz</td>
+<td>码环响应和噪声权衡</td>
+</tr>
+<tr>
+<td><code>dll_damping</code></td>
+<td>0.7</td>
+<td>二阶码环阻尼</td>
+</tr>
+<tr>
+<td><code>pll_bandwidth_hz</code></td>
+<td>18 Hz</td>
+<td>载波环带宽，当前校验不允许超过18</td>
+</tr>
+<tr>
+<td><code>early_late_offset_chips</code></td>
+<td>0.06</td>
+<td>单边 E/L 间隔</td>
+</tr>
+<tr>
+<td><code>quality_epochs</code></td>
+<td>50</td>
+<td>约每0.5秒更新质量</td>
+</tr>
+<tr>
+<td><code>min_cn0_db_hz</code></td>
+<td>25 dB-Hz</td>
+<td>质量门限之一</td>
+</tr>
+<tr>
+<td><code>min_lock_indicator</code></td>
+<td>0.6</td>
+<td>锁定指示器门限</td>
+</tr>
+<tr>
+<td><code>max_residual_frequency_hz</code></td>
+<td>25 Hz</td>
+<td>半历元频差检查</td>
+</tr>
+<tr>
+<td><code>good_windows_to_lock</code></td>
+<td>2</td>
+<td>两个好窗后锁定</td>
+</tr>
+<tr>
+<td><code>bad_windows_to_lose</code></td>
+<td>2</td>
+<td>两个坏窗后失锁</td>
+</tr>
+</tbody></table>
+<p>这些是核心 defaults；在线 <code>.f</code> 只显式暴露其中部分，不能把所有核心结构成员都当成已支持的配置项。缩小 DLL/PLL 带宽可能减小噪声，但减慢收敛并降低动态跟踪能力；调整时要比较失锁次数、误差与电文成功率。</p>
+<h3 id="section-49">11.3 质量与假锁抑制</h3>
+<p>Prompt 功率一阶/二阶矩用于估计信号和噪声，构成窄带相关 C/N0；不把非物理解取绝对值后冒充有效值。质量窗口尚未收齐时为 NaN，理想零噪声可为正无穷。该量未经射频总功率标定。</p>
+<p>数据路以 I 轴、导频路以 Q 轴形成对符号翻转不敏感的锁定指标，并按信号功率组合。每个历元又拆成前后两半，利用相位差估计残余频率，防止 10 ms Costas 环落到约 50 Hz 的假锁分支。有效性同时依赖 C/N0、锁定指示器、码误差和半历元频差，不是看单一 C/N0 曲线。</p>
+<h3 id="section-50">11.4 状态与重捕获</h3>
+<p>初始状态 pull_in，连续好窗后转 locked；连续坏窗后转 lost。lost 在当前 generation 内为终止状态，只有显式重捕获/重置才能重新进入 pull_in。C/N0 回升本身不会直接恢复有效标志。</p>
+<p>离线自动重捕获在完整码周期边界执行，默认每通道最多尝试3次、至少间隔约1秒，在当前频率附近正负1000 Hz 搜索。成功后 generation 递增、NCO 重置，重新等待锁定；<code>reacquire_ok</code> 不代表立刻有有效电文。在线 live engine 另有调度：失锁通道约隔1秒重试，初始未捕获通道在已有工作通道后约每30秒重搜，间隔按采样流时间计算。</p>
+<h3 id="section-51">11.5 连续性和输出解释</h3>
+<p>同一 generation 中应满足“本行 absolute_sample+sample_count=下一行 absolute_sample”。<code>sample_time_s=absolute_sample/Fs</code> 是记录内时间；epoch 是代次内序号，record_index 是输出行号。不能简单用行号乘10 ms代替精确时间，也不能跨重捕获拼接载波相位。</p>
+<p>输出每星 <code>prn_XX.csv</code>、全局 <code>events.csv</code>、<code>summary.csv</code> 和 <code>run.json</code>。应分别看运行完整性、有效历元、失锁计数、重捕获和 EOF 部分样本。返回0表示请求的完整历元数已处理，不保证所有通道锁定。核心拒绝 NaN/Inf 和未显式重置的样本缺口；不足一个完整主码周期不输出伪历元。</p>
+<h2 id="section-52">12 北斗导航电文与星历</h2>
+<h3 id="section-53">12.1 从相关输出到帧</h3>
+<p>每10 ms主码周期产生一个符号。导频以 <code>pilot_q_p</code> 符号与1800长度子码匹配，相关绝对值必须为1800，等价于 MATLAB 的至少1799.5门限。一帧18秒，当前要求1800个符号全部正确，因此弱信号下一个错误即可导致漏帧。</p>
+<p>数据路以 <code>data_i_p&gt;0</code> 判1。先检查 BCH(21,6)，必要时反转整帧极性，再检查 BCH(51,8)，得到PRN和SOH。门限20/50实际上要求当前路径的完整无错码字，不进行BCH纠错。</p>
+<h3 id="section-54">12.2 解交织和校验</h3>
+<p>后1728个符号按36×48矩阵解交织，零基行2、5直到32组成子帧3，其余组成子帧2。当前跳过LDPC，直取子帧2前600位和子帧3前264位，分别做CRC24Q；两者都通过才输出878位信息/CRC内容和星历。</p>
+<p>CRC检查用于拒绝错误信息，不等于纠错。当前不使用LDPC校验部分恢复有错比特，所以完整帧率、弱信号敏感性和首定位等待时间受此限制。后续若增加软判决或LDPC，必须保留现有参考路径作回归。</p>
+<h3 id="section-55">12.3 连续性和时间</h3>
+<p>1800个输入必须 locked、valid，属于同一generation，样本和epoch连续。采样缺口、失锁或重捕获会清空未完成窗口，不从两段信号拼成一帧。帧尾不足1800个符号不输出。</p>
+<p>WN是BDT周号；HOW是周内小时数；SOH在输出中已乘18成为小时内秒，<code>TOW=HOW×3600+SOH</code>。帧首的absolute_sample是接收文件位置，TOW是电文发射时间标签，两者不共享原点，不能直接相减测距。</p>
+<h3 id="section-56">12.4 字段解析与适用性</h3>
+<p>输出轨道、钟差、群延迟、HS健康、DIF/SIF/AIF完整性和SISMAI等字段。SatType=1/2/3分别表示GEO/IGSO/MEO。deltaA是相对参考半长轴差，不是sqrt_a。轨道距离用m、角度用rad、钟差与群延迟用s。Page1电离层参数属于BDGIM，不应当作GPS Klobuchar系数。</p>
+<p>每帧重新初始化字段，缺少的扩展页为NaN，不把旧页面残留当成新帧数据。当前解析Page1部分电离层/UTC和Page3 BGTO；其他页并未完整解析所有历书。当前C实现将IODC按10位读取，对早期MATLAB多读一位的问题作了单独修正；对照报告需保留该有意差异。</p>
+<p>输出 <code>frames.csv</code>、<code>ephemerides.csv</code>、<code>summary.csv</code> 和 <code>run.json</code>。complete表示输入读完，decoded_frames才表示有效帧数。帧valid仍不等于可用于定位，后续还需健康、时效、连续段及模型支持检查。</p>
+<h2 id="section-57">13 北斗伪距与单点定位</h2>
+<h3 id="section-58">13.1 统一接收采样历元</h3>
+<p>所有卫星必须在同一个absolute_sample上构造观测。找到包含该采样点的完整跟踪历元，用残余码相位和瞬时码率插值，然后结合当前连续段的有效帧时间锚点：</p>
+<pre><code class="language-text">code_phase = rem_code_phase + code_rate/Fs * (sample - epoch_first_sample)
+transmit_time = frame_TOW + ((epoch - frame_epoch) + code_phase/10230)*0.01
+raw_pseudorange = c * (local_receive_time - transmit_time)
+</code></pre>
+<p>周号与周内秒分开维护，处理周边界。帧锚点必须属于同一generation/连续段，且后续帧的时间增量和主码周期数一致。失锁后的新段即使有很好的C/N0，也要先获得本段完整帧才能构造有效发射时间。</p>
+<h3 id="section-59">13.2 本地接收时间与钟差</h3>
+<p>首个本地接收时刻按最大有效发射时刻加68.802 ms初始化。该偏置是参考算法本地钟初值，不是天线传播真值。每历元解算接收位置X/Y/Z和米制钟差b，再执行 <code>local_time -= b/c</code>，之后按公共样本步长推进。</p>
+<p>因此首历元clock_correction_m可以很大，后续主要是两次更新之间的剩余修正，不能把该列直接当作未重置的累计硬件钟偏。更改初始偏置应主要被钟差吸收，而不应改变正确收敛的位置。</p>
+<h3 id="section-60">13.3 轨道和卫星钟差</h3>
+<p>卫星状态沿用B1C专用参考。MEO参考半长轴27,906,100 m，IGSO为42,162,200 m，加deltaA、ADot、平均角速度与变化率，解开普勒方程并加入谐波、节点与倾角变化，得到发射时刻ECEF。</p>
+<p>卫星钟差由钟多项式、相对论项和负T_GDB1Cp组成。当前沿用联合数据/导频跟踪模型，不另外减ISC_B1Cd；如切换成纯数据测距，必须重新核对时延模型。当前不支持GEO，遇到该类型明确拒绝，不能用MEO公式代替。</p>
+<p>轨道和钟差的应用层最大年龄均默认7200秒，结合完整WN/TOW判断，防止把一周前的数据因取模误当作新数据。</p>
+<h3 id="section-61">13.4 观测改正和解算</h3>
+<p>原始伪距包含接收钟差。先按 <code>raw+c×satellite_clock_s</code> 做卫星钟差改正，再在解算中估计接收钟差。进一步扣接收钟差得到接收机修正后的伪距，其中仍有大气、多径和码测量误差。</p>
+<p>SPP使用等权四状态最小二乘，从地心初始化，采用参考的10次迭代路径，加入传播期间地球旋转改正。线性方程用Householder QR，拒绝秩不足或病态几何；坐标必须有限、收敛且在地球附近。至少需要4颗独立有效卫星，且几何可解，数量条件本身不足以保证定位。</p>
+<p>默认每200 ms输出一次，5度仰角门限在获得初始位置后应用，并在后续历元重新评估所有候选星。HS、DIF、SIF、AIF任何一个非零都排除。HDOP/VDOP在本地ENU中计算，不能把ECEF的XY/Z直接当作水平与垂直分量。</p>
+<h3 id="section-62">13.5 大气模型和当前缺项</h3>
+<p>默认对流层沿用固定参数：海平面、1013 mb、293 K、50%相对湿度，不使用真实站高或实测气象。可用 <code>--no-tropo</code> 关闭。当前没有电离层改正、URA/SISMAI加权、RAIM、多径专用处理或载波相位定位。即使成功输出valid=1，也只是通过当前模型和工程检查，不代表完整性认证。</p>
+<h3 id="section-63">13.6 输出与失败行为</h3>
+<p><code>solutions.csv</code> 保存采样时刻、接收BDT估计、ECEF、WGS84经纬高、钟差、DOP、RMS、用星数和状态；<code>observations.csv</code> 保存逐星发射时间、三类伪距、卫星坐标/钟差、仰角、对流层项和残差；<code>exclusions.csv</code> 保存排除原因；<code>run.json</code> 保存参数与完整性。</p>
+<p>不足卫星、几何退化或不收敛时输出无效状态和NaN坐标，不把上次坐标当作新结果。少于4个有效帧通道时可以正常完成并输出空表。输入损坏、CRC错误或电文与实际跟踪不匹配属于输入错误，不应解释为“信号暂时不够”。</p>
+<h2 id="section-64">14 北斗 B210 在线接收参数与调度</h2>
+<h3 id="section-65">14.1 当前显式参数</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>当前值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>device</code></td>
+<td>usrp_b210</td>
+<td>只支持当前B210路径</td>
+</tr>
+<tr>
+<td><code>device_args</code></td>
+<td>type=b200</td>
+<td>UHD发现类型过滤</td>
+</tr>
+<tr>
+<td><code>serial</code></td>
+<td>空</td>
+<td>默认选发现列表第一台；指定后找不到就失败</td>
+</tr>
+<tr>
+<td><code>center_frequency_hz</code></td>
+<td>1575420000</td>
+<td>B1C射频中心</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td>4092000</td>
+<td>请求采样率，核心使用回读值</td>
+</tr>
+<tr>
+<td><code>master_clock_rate_hz</code></td>
+<td>32736000</td>
+<td>期望主时钟，实际支持待验收</td>
+</tr>
+<tr>
+<td><code>bandwidth_hz</code></td>
+<td>4000000</td>
+<td>窄带BOC接收带宽</td>
+</tr>
+<tr>
+<td><code>gain_db</code></td>
+<td>42</td>
+<td>需结合天线/前端调整</td>
+</tr>
+<tr>
+<td><code>rx_antenna</code></td>
+<td>RX2</td>
+<td>实际接TX/RX时必须修改</td>
+</tr>
+<tr>
+<td><code>clock_source</code> / <code>time_source</code></td>
+<td>external / external</td>
+<td>要求实际接线与状态检查</td>
+</tr>
+<tr>
+<td><code>if_hz</code></td>
+<td>0</td>
+<td>不沿用离线20kHz</td>
+</tr>
+<tr>
+<td><code>prn_list</code></td>
+<td>1-63</td>
+<td>初始捕获列表</td>
+</tr>
+<tr>
+<td><code>doppler_min_hz</code> / <code>doppler_max_hz</code></td>
+<td>-8000 / 8000</td>
+<td>搜索范围</td>
+</tr>
+<tr>
+<td><code>doppler_step_hz</code> / <code>fine_step_hz</code></td>
+<td>250 / 25</td>
+<td>粗/细步长</td>
+</tr>
+<tr>
+<td><code>acquisition_threshold</code></td>
+<td>10</td>
+<td>联合统计量门限</td>
+</tr>
+<tr>
+<td><code>coherent_integration_ms</code></td>
+<td>10</td>
+<td>完整主码积分</td>
+</tr>
+<tr>
+<td><code>dll_bandwidth_hz</code> / <code>pll_bandwidth_hz</code></td>
+<td>1 / 18</td>
+<td>跟踪环路</td>
+</tr>
+<tr>
+<td><code>early_late_chips</code></td>
+<td>0.06</td>
+<td>单边相关间隔</td>
+</tr>
+<tr>
+<td><code>queue_seconds</code></td>
+<td>16</td>
+<td>有界积压容量</td>
+</tr>
+<tr>
+<td><code>position_period_ms</code></td>
+<td>200</td>
+<td>在线定位周期</td>
+</tr>
+<tr>
+<td><code>elevation_mask_deg</code></td>
+<td>5</td>
+<td>首次位置后筛星</td>
+</tr>
+<tr>
+<td><code>ui_port</code></td>
+<td>8766</td>
+<td>北斗独立网页</td>
+</tr>
+</tbody></table>
+<h3 id="section-66">14.2 设备时间与实际采样率</h3>
+<p>启动配置外部参考和PPS，检查ref_locked与PPS跳变，在未知日期的PPS上归零硬件时间，约0.2秒之后定时开始RX。未知PPS只提供秒边界，不提供UTC/BDT日期，也不能单凭两台都选择external就声称绝对时间对齐。</p>
+<p>硬件回读Fs可能带小数。当前捕获容许每10ms与整数样本数相差不超过0.01 sample，等价于距最近100Hz网格不超过1Hz；只对FFT和码缓冲长度取整，混频、码副本、跟踪和时间计算仍使用实际Fs。不能把回读值强改成请求值来消除误差。定位周期映射到最近硬件采样间隔，实际时间以样本数除实际Fs为准。</p>
+<h3 id="section-67">14.3 队列和吞吐</h3>
+<p>fc32每样本8字节，4.092 Msps、16秒队列约523.8MB，即约499.5MiB。配置上限约2GiB。队列吸收短时积压，不会提升DSP的长期吞吐。初次全PRN捕获可能显著耗时，要观察处理延迟与队列增长。</p>
+<p>满队列会丢弃旧积压并计数，触发断段和重新捕获。UHD overflow或正向样本跳变也不能被拼接；时间倒退报错。原始IQ默认不落盘，在线JSONL只含处理结果和状态，因此不能事后从它重新计算完整IQ算法。</p>
+<h3 id="section-68">14.4 首定位的因果约束</h3>
+<p>必须完成初始捕获、环路确认、获得帧边界并收齐18秒帧，才可能有本段在线位置。等待下一帧边界、弱信号漏帧、处理积压会进一步延长墙钟时间。离线回溯可在收到完整帧后解算帧首附近的更早采样点；在线不能使用这种未来信息。</p>
+<h2 id="section-69">15 时间体系与坐标体系</h2>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>原点与单位</th>
+<th>正确用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>主机墙钟</td>
+<td>Unix毫秒等</td>
+<td>界面新鲜度、文件与事件归档</td>
+</tr>
+<tr>
+<td>UHD硬件时间</td>
+<td>设备时钟与PPS约定</td>
+<td>采样连续性、设备时间配对</td>
+</tr>
+<tr>
+<td>absolute_sample</td>
+<td>文件或本次流的复数样本计数</td>
+<td>处理时刻与跨块连续性</td>
+</tr>
+<tr>
+<td>GNSS sample_time_s</td>
+<td>absolute_sample/Fs</td>
+<td>记录相对时间</td>
+</tr>
+<tr>
+<td>BDT WN/TOW</td>
+<td>电文发射时间标签</td>
+<td>星历、发射时刻与伪距模型</td>
+</tr>
+<tr>
+<td>融合 timestamp_ns</td>
+<td>统一观测约定中的纳秒</td>
+<td>调用者事先完成时间对齐</td>
+</tr>
+</tbody></table>
+<p>主机收包时间不参与精密TOA。64位样本和事件编号在网页JSON里用字符串传输，避免超过JavaScript的2^53整数精度。PPS归零后的硬件时间不能未经日期赋值就写成UTC纳秒。融合配置中的 <code>time_scale=UTC_NS</code> 目前只是声明，未自动完成BDT与UTC转换。</p>
+<p>卫星和融合模型使用ECEF米。北斗位置可转换为WGS84纬度、经度和椭球高；椭球高不是海拔。ENU用于局部展示，默认参考点为本实验首个有效解，显示的是相对散布。把5G局部锚点加入融合前，要有测量得到的ENU/ECEF原点与旋转转换，不能将(0,0,3)直接当成地心坐标。</p>
+<h2 id="section-70">16 离线融合 WLS</h2>
+<h3 id="section-71">16.1 统一观测格式</h3>
+<pre><code class="language-text">timestamp_ns,source,source_id,source_x_m,source_y_m,source_z_m,pseudorange_m,sigma_m,cn0_db_hz,valid
+</code></pre>
+<p>source=0为B1C，1为NR SSB，2为NR PRS。source坐标是观测时刻所需的ECEF米，伪距和sigma均为米。timestamp_ns需由上游统一，不能混入不同日期/时基。当前CSV加载器不会按timestamp自动分组，应用一次读取整个文件求一个解，故输入应是事先组织好的一组同历元观测。</p>
+<h3 id="section-72">16.2 模型和状态</h3>
+<p>单系统状态为位置加一个钟差，共4维；同时包含北斗和NR时为 <code>[X,Y,Z,b_BDS,b_NR]</code> 共5维。模型为几何距离加对应系统米制钟差。至少需要4条或5条有效观测，还要有足够独立几何；同一锚点的重复测量不能当成新的独立几何源。</p>
+<p>残差为观测减预测，几何方向导数组成设计矩阵H。每轮构造加权法方程，使用带主元选择的消元求增量。这里使用法方程，与北斗SPP的Householder QR不是同一数值路径。</p>
+<h3 id="section-73">16.3 鲁棒权与收敛</h3>
+<p>初始权为1/sigma²，标准化残差绝对值为z。z超过Huber门限k时再乘k/z，降低离群观测权重。默认k=3、最大15轮、位置增量范数小于0.001m时收敛。该收敛阈值约束迭代步长，不代表毫米级实际精度。</p>
+<p>当前不输出完整协方差或完整性认证。返回0代表收敛，1代表迭代未收敛，负值代表输入/数量/方程异常。输出位置、两个钟差、残差RMS、使用观测数和converged。不能仅看JSON文件存在判断解有效。</p>
+<h3 id="section-74">16.4 NR适配器</h3>
+<p>适配器要求测量valid、锚点absolute_time_valid且PCI匹配，先做 <code>corrected_toa_ns=toa_ns-calibrated_delay_ns</code>，拒绝非有限或非正值，再乘光速形成伪距。sigma使用 <code>max(0.5,12/max(peak_metric,1))</code> 米的启发式映射，未经过真实射频误差统计标定。</p>
+<p>适配器当前将NR输出source固定为SSB，并把snr_db写入公共cn0_db_hz字段。这是现有兼容映射，SNR不等于GNSS C/N0；分析公共质量列时必须保留来源语义。融合配置中2m/1.5m标准差并未被该入口自动读取。</p>
+<h3 id="section-75">16.5 尚未自动完成的工作</h3>
+<p>在线接入还需要：卫星观测到公共结构的可靠导出；5G绝对/伪距时间模型；多设备共同历元；局部锚点到ECEF；系统间时间转换；标定数据和身份匹配；按时刻分组；观测有效性和几何检查；在线位置输出与UI连接。两台B210共用10MHz/PPS有助于建立频率与秒边界关系，但不会代替这些处理。</p>
+<h2 id="section-76">17 网页与记录流程</h2>
+<h3 id="section-77">17.1 5G监看</h3>
+<p>C端限频创建快照并放入固定队列，由独立记录线程写JSONL；Python服务仅监听127.0.0.1，通过GET提供bootstrap、state、recordings、replay。网页按频点/PCI/SSB选目标，展示Summary、SSB Trace和Results。不同事件的阶段不会拼成虚构的一次完整处理。</p>
+<p>默认状态记录200ms、阶段快照1000ms、网页轮询200ms，过期门限5000ms。单段128MiB、本次最多8段，约1GiB轮换容量；旧实验不自动删除。文件每段重复config，保存当时加载参数，回看不从当前磁盘配置反推旧实验。</p>
+<p>source_mode=controlled或commercial只声明场景；time_model=shared或receiver_bias只声明时间模型；absolute_toa_calibrated默认0。它们不会配置设备时钟或完成标定。UI只有在底层测量、事件时钟状态、时间模型和标定等满足时才显示可用的绝对量。</p>
+<h3 id="section-78">17.2 北斗离线导入</h3>
+<p><code>ui/import_gnss.py</code> 将同次实验捕获/跟踪/电文/定位文件导入新目录中的data.sqlite和run.json，保留参数快照、源文件元数据和SHA256。只有跟踪也可导入；若提供定位，必须同时提供匹配电文。应在源文件停止写入后导入，SQLite索引不自动追踪后续CSV追加。</p>
+<p>离线展示四种数量：捕获、当前有效跟踪、当前完整电文就绪、定位用星。它们不应强制一致。回溯位置可以早于所依赖电文的收齐时间，界面需标识离线回溯及available_s；这不是实时提前获得位置。</p>
+<h3 id="section-79">17.3 北斗在线读取</h3>
+<p>实采记录在 <code>log/gnss-live/&lt;实验&gt;/events-&lt;段号&gt;.jsonl</code>，独立于5G目录。每段32MiB、每次最多8段，约256MiB轮换。类型包括config、hardware_origin、runtime、acquisition、tracking、frame、position、event、gap。</p>
+<p>北斗live以程序运行且状态不超过3秒为connected，current还要求处理滞后不超过2秒且reader无未读积压。超过门限时当前锁定和位置留空，历史仅用于诊断。reader有每次4MiB、单行256KiB等上限，保留滚动历史；当前不支持完整实采归档直接导入SQLite。</p>
+<h3 id="section-80">17.4 网页功能边界</h3>
+<p>冻结只暂停显示；关闭网页不会停止算法。当前HTTP没有修改配置、启停设备、上传执行或IQ重算功能。5G接口position_solver仍为false；北斗实际位置使用独立GNSS接口，不能因该5G标志为false而误认为北斗没有定位。</p>
+<h2 id="section-81">18 实验运行操作流程</h2>
+<h3 id="section-82">18.1 5G接收与监看</h3>
+<p>先选择已核对的nr_config，确认设备序列号、频点、SCS、PCI、时钟和增益，再检查：</p>
+<pre><code class="language-bash">cmake --preset offline
+cmake --build --preset offline --parallel 2
+./build/offline/src/5G/nr-config-check config/config.f receiver
+./build/offline/src/5G/nr-config-check config/config.f anchor
+</code></pre>
+<p>预期输出配置检查结论，不打开SDR。下一步启动在线接收：</p>
+<pre><code class="language-bash">sh run_5G_only.sh
+</code></pre>
+<p>脚本增量构建radio，启动接收机和UI。默认打开 <code>http://127.0.0.1:8765/</code>。启动日志在 <code>log/launcher/&lt;时间&gt;-&lt;PID&gt;/</code>，测量和监看在log对应目录。先看设备参数与采样连续性，再看PSS→SSS→PBCH/MIB→锁定→测量。Ctrl+C清理本次两个进程。仅看已有记录用 <code>sh run_5G_only.sh --ui-only</code>。</p>
+<p>锚点须另开终端执行 <code>./build/radio/src/5G/nr-ssb-anchor -O config/config.f</code>，输出tx_event.csv；应按第8章核对简化波形和身份限制，不把启动成功当作标准多锚点验收。</p>
+<h3 id="section-83">18.2 北斗在线接收</h3>
+<pre><code class="language-bash">uhd_find_devices
+sh run_BDS_only.sh --check
+sh run_BDS_only.sh
+</code></pre>
+<p>先在bds_b1c.f选择实际设备、天线、10MHz/PPS和增益。检查模式不构建或打开设备；运行模式按gnss-radio构建并打开真实RX。默认网页 <code>http://127.0.0.1:8766/</code>。输出launcher日志和gnss-live JSONL。</p>
+<p>验收顺序为设备参数/参考与PPS → 收样连续性 → 捕获 → 稳定跟踪 → 完整有效帧 → 当前有效位置 → 处理延迟与持续运行。无足够信号时应允许无帧或无位置，不能以网页正常显示代替射频成功。两台B210同时连接时，建议分别在各自配置固定真实serial，避免北斗空serial误选另一台。</p>
+<h3 id="section-84">18.3 北斗离线一键流程</h3>
+<p>先编辑 <code>config/GNSS/offline.f</code>：真实路径、ci8/cf32、Fs、IF、处理秒数和PRN。当前参考显式为ci8、18Msps、+20kHz、60秒、PRN1至63。</p>
+<pre><code class="language-bash">sh run_BDS_only.sh --offline --check
+sh run_BDS_only.sh --offline
+</code></pre>
+<p>输出 <code>log/gnss/runs/&lt;实验&gt;/</code> 的算法结果、<code>log/gnss-ui/&lt;实验&gt;/</code> 的导入结果及launcher日志。任一阶段失败会停止后续阶段。首次60秒离线处理可能耗时数分钟，计算完成后启动网页。只看已导入结果用 <code>sh run_BDS_only.sh --ui-only</code>。</p>
+<h3 id="section-85">18.4 北斗离线分阶段流程</h3>
+<p>下面命令是现有入口的操作示例，不是新增构建脚本。IQ路径填真实文件；示例输出目录必须尚不存在，重复实验换名称。</p>
+<pre><code class="language-bash">cmake --preset gnss-offline
+cmake --build --preset gnss-offline --parallel 2
+ctest --preset gnss-offline
+mkdir -p log/gnss/manual-01
+IQ=&#39;/data/bds/L1_IF20KHz_FS18MHz.bin&#39;
+
+./build/gnss-offline/src/GNSS/bds-b1c-receiver \
+  --input &quot;$IQ&quot; --input-format ci8 --sample-rate 18000000 --if 20000 \
+  --prns 1-63 --output log/gnss/manual-01/acquisition.csv
+
+./build/gnss-offline/src/GNSS/bds-b1c-track \
+  --input &quot;$IQ&quot; --input-format ci8 --sample-rate 18000000 --if 20000 \
+  --acquisition-csv log/gnss/manual-01/acquisition.csv \
+  --seconds 60 --output-dir log/gnss/manual-01/tracking
+
+./build/gnss-offline/src/GNSS/bds-b1c-nav \
+  --tracking-dir log/gnss/manual-01/tracking --sample-rate 18000000 \
+  --output-dir log/gnss/manual-01/navigation
+
+./build/gnss-offline/src/GNSS/bds-b1c-position \
+  --tracking-dir log/gnss/manual-01/tracking \
+  --navigation-dir log/gnss/manual-01/navigation --sample-rate 18000000 \
+  --output-dir log/gnss/manual-01/position
+</code></pre>
+<p>每步成功后再执行下一步。依次检查捕获CSV的acquired、跟踪summary与valid、电文decoded_frames、定位valid_fixes和exclusions。下一步导入：</p>
+<pre><code class="language-bash">python3 ui/import_gnss.py \
+  --tracking-dir log/gnss/manual-01/tracking \
+  --navigation-dir log/gnss/manual-01/navigation \
+  --position-dir log/gnss/manual-01/position \
+  --acquisition-csv log/gnss/manual-01/acquisition.csv \
+  --output-dir log/gnss-ui/manual-01 --name &#39;B1C手动实验01&#39;
+sh run_BDS_only.sh --ui-only
+</code></pre>
+<p>导入输出data.sqlite与run.json。网页选择对应实验，核对采样率、四种卫星数量、帧时间和定位用星。</p>
+<h3 id="section-86">18.5 5G IQ回放和融合调用</h3>
+<pre><code class="language-bash">./build/offline/src/5G/replay_toa_iq /data/5g/capture.c16 30720000
+</code></pre>
+<p>输入应是对应的c16 IQ和真实采样率，结合其meta文件核对频点、窗口和时间。输出同步/解码诊断，下一步与采样时原日志比较。仓库部分export/plot工具仍为占位，不能假定运行它们必有完整统计图。</p>
+<p>离线融合在准备好同历元、同坐标系的真实CSV后调用：</p>
+<pre><code class="language-bash">./build/all-offline/src/fusion/bds5g-positioning \
+  --observations /data/fusion/epoch.csv \
+  --initial-x -1280000 --initial-y -4720000 --initial-z 4070000 \
+  --output log/fusion-solution.json
+</code></pre>
+<p>上面的初值只是ECEF格式示例，需改为适合实际实验的初值；输入文件需事先准备。输出收敛位置、钟差、RMS和观测数，下一步与真值及单系统结果比较。该CLI不读取wls.f，不自动按多个timestamp输出轨迹。</p>
+<h2 id="section-87">19 已有验证结果与证据解释</h2>
+<h3 id="section-88">19.1 捕获和跟踪</h3>
+<p>2026年10月20日捕获记录使用真实ci8、18Msps、20kHz IF的首20ms。63个PRN检测一致，成功PRN为23、25、27、28、37、43、46。7颗的频率和码相位与MATLAB差均为0；统计量最大相对差5.72e-14，189组码和16组采样副本逐字节一致。</p>
+<p>2026年10月21日跟踪记录为每星6000历元、共42000历元。默认自动模式7星最终锁定；PRN25重捕获一次，从generation0进入1。关闭重捕获作对照时，PRN25与参考一样不能形成可靠锁定，其余6星稳定；全部历元起点样本差为0，NCO等数值差接近双精度舍入量级。</p>
+<p>18Msps、7通道处理60秒记录约需179秒，是当时离线记录，不代表当前4.092Msps在线吞吐；更不能推定加入队列后自动达到实时。</p>
+<h3 id="section-89">19.2 电文和定位</h3>
+<p>自动重捕获记录7星共21帧通过双CRC；禁用重捕获为6星18帧。帧首采样点、极性、878位信息/CRC与参考一致，IODC修正单列。真实帧类型为MEO，其他类型与扩展页覆盖范围见各验收记录。</p>
+<p>两种定位模式均为278/278有效历元。自动模式首历元7星，之后6星；PRN25解算后仰角约0.893度，按5度门限排除。中位坐标约纬度40.009973328度、经度-105.244333287度、椭球高1616.116m；这是参考记录位置，不是本实验室设备位置。</p>
+<p>自动模式后277个历元相对中位数的ENU样本标准差约0.465/0.506/0.849m，残差RMS约0.016至2.165m。没有天线真值，这些只能表示短期散布和内部一致性。C/MATLAB坐标分量约1e-8m差异代表数值实现一致，绝不是纳米级实际定位精度。</p>
+<h3 id="section-90">19.3 在线与网页验证</h3>
+<p>最新live_receiver说明记录：WSL Ubuntu、GCC13、UHD4.6真实后端编译通过；队列、间断、零输入、在线因果条件和接收替身生命周期有测试。最新README记录all-offline的21项CTest和30个Python用例通过。早期文档的13/15/17/19组是各阶段历史数量，不能横向当作同一版本测试规模。</p>
+<p>GitHub Actions配置offline、radio、all-offline、gnss-radio矩阵及浏览器检查；工作流文件存在不等于当前远端运行已成功。替身和合成显示测试不代表目标B210已实际捕获卫星。本次编写只检查资料和源码，没有重新采集射频、重建全部基线或运行重型构建。</p>
+<h3 id="section-91">19.4 验证分层</h3>
+<p>码/向量一致 → 单算法一致 → 文件链连续性一致 → UI语义正确 → UHD真实后端可编译 → B210射频接收成功 → 持续实时运行 → 已知天线真值精度 → 双设备同步与融合精度，是不同层级。每一层只能证明其直接覆盖的行为，不能用页面可见、程序返回0或CTest全绿替代后续层级。</p>
+<h2 id="section-92">20 故障定位与排查顺序</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>先检查</th>
+<th>再处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>找不到USRP或连错设备</td>
+<td>serial、device_args、发现列表</td>
+<td>双设备分别固定序列号</td>
+</tr>
+<tr>
+<td>外部参考/PPS失败</td>
+<td>接线、源类型、设备真实报告</td>
+<td>对应硬件状态恢复后重启</td>
+</tr>
+<tr>
+<td>5G只有PSS没有锁定</td>
+<td>频点、SCS、CFO、窗口、DMRS/BCH失败阶段</td>
+<td>对照IQ与meta，不只提高增益</td>
+</tr>
+<tr>
+<td>5G锁定但无距离</td>
+<td>发射事件来源、同源时间、标定门限</td>
+<td>当前独立进程TX时间接口需补齐</td>
+</tr>
+<tr>
+<td>5G改配置后没变化</td>
+<td>启动时加载快照</td>
+<td>重启，核对主配置所选文件</td>
+</tr>
+<tr>
+<td>北斗全PRN无捕获</td>
+<td>ci8/cf32、Fs、IF、中心、天线与增益</td>
+<td>核对搜索范围和实际信号</td>
+</tr>
+<tr>
+<td>捕获有星但跟踪失锁</td>
+<td>频率种子、环路、质量和半历元频差</td>
+<td>看generation与重捕获事件</td>
+</tr>
+<tr>
+<td>跟踪很好但无电文</td>
+<td>完整18秒连续窗口、子码硬判决、数据CRC</td>
+<td>当前无LDPC，弱信号可能长期漏帧</td>
+</tr>
+<tr>
+<td>有帧却无定位</td>
+<td>至少4星、连续段、健康、星历年龄、模型</td>
+<td>逐项查exclusions，避免跨段继承</td>
+</tr>
+<tr>
+<td>PRN25有帧却不参与</td>
+<td>仰角与排除原因</td>
+<td>已有参考中属于低仰角排除</td>
+</tr>
+<tr>
+<td>在线位置短暂后消失</td>
+<td>状态新鲜度、处理延迟、reader积压</td>
+<td>查队列、overflow和断流</td>
+</tr>
+<tr>
+<td>内存高/延迟增长</td>
+<td>实际Fs、通道数、初次捕获、队列</td>
+<td>测长期吞吐，队列不能补长期不足</td>
+</tr>
+<tr>
+<td>融合发散/奇异</td>
+<td>ECEF、同历元、独立几何、钟差数量</td>
+<td>核对初值、sigma和观测有效性</td>
+</tr>
+<tr>
+<td>换电脑网页没有实验</td>
+<td>log不入Git</td>
+<td>复制导入目录或重新导入</td>
+</tr>
+</tbody></table>
+<p>排查优先从输入真实性、设备与时间连续性开始，再进入算法参数；先保证有可解释的数据，再讨论优化精度。</p>
+<h2 id="section-93">21 后续推进与实验验收</h2>
+<p>第一阶段完成北斗实机：确认B210、北斗天线/前端、外部10MHz/PPS和实际采样率，记录捕获耗时、每星锁定、帧率、首位置墙钟时间、CPU、内存和连续运行丢弃。断流后必须清除当前解，重新获得本段完整帧。</p>
+<p>第二阶段完成单系统物理量核验：北斗用已知天线坐标比较绝对误差和时间序列；5G补齐CIR延迟栅格、符号起点、TX事件配对和硬件固定延迟，用已知线缆/几何条件分离固定偏置与随机误差。</p>
+<p>第三阶段补齐5G锚点身份和波形、实际多锚点关联、公共历元和可用几何。当前两个示例锚点不足以自动支持一般三维未知钟差定位；PCI/SSB条目数量也不能替代独立锚点数。</p>
+<p>第四阶段连接融合：输出同历元公共观测，完成坐标和BDT/设备/UTC约定，标定两系统sigma，以同一段真实数据比较北斗单独、5G可用部分和融合。检查双钟差是否吸收时间偏差，检查残差、几何与失效行为，而不只比较轨迹是否平滑。</p>
+<p>随后按实测瓶颈决定多PRN捕获调度、降采样/向量化、环路优化、软同步、LDPC、电离层和气象模型等改进；每次改变都要保留现有MATLAB基线与真实记录回归。</p>
+<h2 id="section-94">22 实验归档与复现要求</h2>
+<p>一次实验建议保存：源代码版本、主配置及子配置副本、实际回读射频参数、序列号、时钟/PPS状态、运行命令、起止时间、输入格式/Fs/IF、原IQ或其明确缺失说明、源文件SHA256、逐阶段输出和日志、退出状态、异常/断流、天线参考坐标及其高度定义。</p>
+<p>log和build被Git忽略，克隆仓库不会携带真实IQ、MATLAB大文件或本地实验。发布软件与交付实验数据是两个动作，复现时要列出哪些大文件需另行拷贝。记录轮换会删除本次最旧段，不等于永久归档；不同实验总磁盘量仍需管理。</p>
+<p>保留原有CU-SDR/SoftGNSS与OAI归属和许可。生成基线时只在工程输出目录保存包装和产物，避免改动原参考源码后失去独立比较的意义。</p>
+<h2 id="section-95">23 关键术语与读数</h2>
+<table>
+<thead>
+<tr>
+<th>术语</th>
+<th>本项目含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>TOA</td>
+<td>到达时间观测，必须说明相对窗口或绝对发射基准</td>
+</tr>
+<tr>
+<td>伪距</td>
+<td>几何距离加钟差及其他误差，不是直接测得真距离</td>
+</tr>
+<tr>
+<td>CFO / Doppler</td>
+<td>频偏；北斗carrier还包含配置IF</td>
+</tr>
+<tr>
+<td>C/N0</td>
+<td>跟踪相关器估计的载噪比，单位dB-Hz</td>
+</tr>
+<tr>
+<td>SNR</td>
+<td>信噪比，不能直接当C/N0</td>
+</tr>
+<tr>
+<td>PCI / SSB index</td>
+<td>小区身份和SSB块索引，不保证对应独立物理锚点</td>
+</tr>
+<tr>
+<td>CIR</td>
+<td>信道冲激响应估计，索引到时间需核对变换尺度</td>
+</tr>
+<tr>
+<td>generation</td>
+<td>重捕获后递增的连续跟踪代次</td>
+</tr>
+<tr>
+<td>valid</td>
+<td>所属阶段的有效标志，不自动向后续所有阶段传递</td>
+</tr>
+<tr>
+<td>complete</td>
+<td>输入处理完整性，不保证信号有效或获得位置</td>
+</tr>
+<tr>
+<td>DOP</td>
+<td>几何放大指标，不直接等于米制误差</td>
+</tr>
+<tr>
+<td>RMS</td>
+<td>当前残差统计，不能代替外部真值误差</td>
+</tr>
+<tr>
+<td>在线因果解</td>
+<td>只用目标时刻之前已收齐的可用数据</td>
+</tr>
+<tr>
+<td>离线回溯解</td>
+<td>可用稍后收齐的帧处理较早采样点</td>
+</tr>
+</tbody></table>
+<h2 id="section-96">24 源码与说明索引</h2>
+<p>各章节的参数和算法以对应代码为依据。遇到旧说明与当前实现不一致，先读代码和最新阶段说明；历史验收中的“下一步尚未完成”只描述当时状态。</p>
+<table>
+<thead>
+<tr>
+<th>主题</th>
+<th>首要源码</th>
+<th>配套说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>项目和构建</td>
+<td>CMakeLists.txt、CMakePresets.json</td>
+<td>README.md</td>
+</tr>
+<tr>
+<td>5G配置</td>
+<td>nr_config_router.c、nr_toa_cfg_loader.c</td>
+<td>config/README.md、5G/docs/README.md</td>
+</tr>
+<tr>
+<td>SSB同步/PBCH</td>
+<td>nr_ssb_provider.c、nr_ssb_sync.c、nr_pbch.c</td>
+<td>5G/docs/README.md</td>
+</tr>
+<tr>
+<td>SSB信道/TOA</td>
+<td>nr_ssb_chest.c、nr_ssb_toa_est.c</td>
+<td>当前文档第7章</td>
+</tr>
+<tr>
+<td>5G锚点</td>
+<td>nr-ssb-anchor.c、nr_ssb_beacon_gen.c、nr_ssb_tx_scheduler.c、nr_anchor_write.c</td>
+<td>当前文档第8章</td>
+</tr>
+<tr>
+<td>PRS与5G解算</td>
+<td>nr_prs_provider.c、nr_prs_*、nr_pos_solver.c、nr_meas_assoc.c</td>
+<td>当前文档第8章</td>
+</tr>
+<tr>
+<td>北斗捕获</td>
+<td>b1c_code.c、b1c_acquisition.c、bds_b1c_receiver.c</td>
+<td>offline_acquisition.md</td>
+</tr>
+<tr>
+<td>北斗跟踪</td>
+<td>b1c_tracking.c、bds_b1c_track.c</td>
+<td>tracking.md</td>
+</tr>
+<tr>
+<td>北斗电文</td>
+<td>b1c_navigation.c、bds_b1c_nav.c</td>
+<td>navigation.md</td>
+</tr>
+<tr>
+<td>北斗定位</td>
+<td>b1c_position.c、bds_b1c_position.c</td>
+<td>positioning.md</td>
+</tr>
+<tr>
+<td>北斗实时</td>
+<td>live_engine.cpp、uhd_b210.c、bds_b1c_live.cpp、launch_bds.py</td>
+<td>live_receiver.md</td>
+</tr>
+<tr>
+<td>融合</td>
+<td>fusion_wls.c、nr5g_adapter.c、observation_io.c</td>
+<td>fusion/docs/architecture.md、data_formats.md</td>
+</tr>
+<tr>
+<td>网页</td>
+<td>server.py、gnss.py、gnss_live.py、import_gnss.py</td>
+<td>ui/README.md、gnss.md、protocol.md</td>
+</tr>
+<tr>
+<td>历史验收</td>
+<td>src/GNSS/docs/validation*.md、ui/validation_gnss_2026-10-22.md</td>
+<td>按阶段日期阅读</td>
+</tr>
+</tbody></table>
+<h2 id="section-97">附录A 当前配置文件完整显式参数快照</h2>
+<p>本附录按当前磁盘文件逐项提取有效赋值，保留每项前的中文说明。它记录配置显式值，不代表程序已加载，也不包含缺省继承值。融合预留字段和旧离线适配器字段的实现状态仍以正文为准。</p>
+<h3 id="section-98">config/5G/anchor0.ssb.usrpb210.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>external</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>external</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3600000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>40</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>20</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-99">config/5G/anchor1.ssb.usrpb210.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>gpsdo</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>gpsdo</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3600000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>40</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>20</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-100">config/5G/nr_n78_reference.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>device</code></td>
+<td><code>usrp_b210</code></td>
+<td>设备类型；旧 5G 适配器参考参数，尚未接入在线加载。</td>
+</tr>
+<tr>
+<td><code>device_args</code></td>
+<td><code>type=b200</code></td>
+<td>设备选择参数；旧 5G 适配器参考参数，尚未接入在线加载。</td>
+</tr>
+<tr>
+<td><code>center_frequency_hz</code></td>
+<td><code>3550000000</code></td>
+<td>中心频率，单位 Hz；旧 5G 适配器参考参数，尚未接入在线加载。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>bandwidth_hz</code></td>
+<td><code>30000000</code></td>
+<td>接收带宽，单位 Hz；旧 5G 适配器参考参数，尚未接入在线加载。</td>
+</tr>
+<tr>
+<td><code>gain_db</code></td>
+<td><code>58</code></td>
+<td>接收增益，单位 dB；旧 5G 适配器参考参数，尚未接入在线加载。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>external</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>external</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>nr_band</code></td>
+<td><code>78</code></td>
+<td>NR 频段编号；-1 表示未指定，用于选择扫描和时域参数。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>target_pci</code></td>
+<td><code>-1</code></td>
+<td>目标小区 PCI：-1 自动搜索，指定值为 0～1007。</td>
+</tr>
+<tr>
+<td><code>provider</code></td>
+<td><code>software_ssb</code></td>
+<td>处理实现：ssb/software_ssb 为 SSB 软件算法，prs 为预留 PRS 算法。</td>
+</tr>
+</tbody></table>
+<h3 id="section-101">config/5G/ue.toa.prs.usrpb210.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>gpsdo</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>gpsdo</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3600000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>30</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>PRS_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-102">config/5G/ue.toa.ssb.limesdr.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>lime</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3600000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>30</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-103">config/5G/ue.toa.ssb.usrpb210.ctc3509.fixed.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3509760000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>50</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>ssb_period_ms</code></td>
+<td><code>20</code></td>
+<td>SSB 周期，单位 ms，用于调度及跟踪预测。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-104">config/5G/ue.toa.ssb.usrpb210.ctc3509.lowrate.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3509760000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>35</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-105">config/5G/ue.toa.ssb.usrpb210.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3600000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>30</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-106">config/5G/ue.toa.ssb.usrpb210.local3600.txrx.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>rx_antenna</code></td>
+<td><code>TX/RX</code></td>
+<td>接收天线端口名称，须与 UHD 设备支持的端口一致。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3600000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>55</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>gain_sweep_enable</code></td>
+<td><code>0</code></td>
+<td>接收增益扫描开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>pbch_lmax</code></td>
+<td><code>8</code></td>
+<td>PBCH Lmax 假设：0 自动，或 4、8、64；不代表所有场景均已验证。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-107">config/5G/ue.toa.ssb.usrpb210.lowrate.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3600000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>35</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-108">config/5G/ue.toa.ssb.usrpb210.multi-target.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>2114550000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>64</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>0</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>gain_sweep_enable</code></td>
+<td><code>0</code></td>
+<td>接收增益扫描开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>target_pci</code></td>
+<td><code>-1</code></td>
+<td>目标小区 PCI：-1 自动搜索，指定值为 0～1007。</td>
+</tr>
+<tr>
+<td><code>scan_targets</code></td>
+<td><code>2114550000@84, 3550080000@188, 3558720000</code></td>
+<td>扫描列表，格式为 频率Hz@PCI，以逗号或分号分隔；PCI 可省略。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>15</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>ssb_period_ms</code></td>
+<td><code>20</code></td>
+<td>SSB 周期，单位 ms，用于调度及跟踪预测。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-109">config/5G/ue.toa.ssb.usrpb210.n1_2114.fixed.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>2114550000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>35</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>15</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-110">config/5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>2114550000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>64</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>gain_sweep_enable</code></td>
+<td><code>0</code></td>
+<td>接收增益扫描开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>target_pci</code></td>
+<td><code>84</code></td>
+<td>目标小区 PCI：-1 自动搜索，指定值为 0～1007。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>15</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>ssb_period_ms</code></td>
+<td><code>20</code></td>
+<td>SSB 周期，单位 ms，用于调度及跟踪预测。</td>
+</tr>
+<tr>
+<td><code>nr_band</code></td>
+<td><code>1</code></td>
+<td>NR 频段编号；-1 表示未指定，用于选择扫描和时域参数。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-111">config/5G/ue.toa.ssb.usrpb210.n1_422910_pci84.ultrarate.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>2114550000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>61440000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>58</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>gain_sweep_enable</code></td>
+<td><code>0</code></td>
+<td>接收增益扫描开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>target_pci</code></td>
+<td><code>84</code></td>
+<td>目标小区 PCI：-1 自动搜索，指定值为 0～1007。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>15</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>ssb_period_ms</code></td>
+<td><code>20</code></td>
+<td>SSB 周期，单位 ms，用于调度及跟踪预测。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-112">config/5G/ue.toa.ssb.usrpb210.oai_default_b210.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>rx_antenna</code></td>
+<td><code>RX2</code></td>
+<td>接收天线端口名称，须与 UHD 设备支持的端口一致。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3509760000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>50</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>gain_sweep_enable</code></td>
+<td><code>0</code></td>
+<td>接收增益扫描开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>target_pci</code></td>
+<td><code>236</code></td>
+<td>目标小区 PCI：-1 自动搜索，指定值为 0～1007。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>0</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>ssb_period_ms</code></td>
+<td><code>20</code></td>
+<td>SSB 周期，单位 ms，用于调度及跟踪预测。</td>
+</tr>
+<tr>
+<td><code>nr_band</code></td>
+<td><code>78</code></td>
+<td>NR 频段编号；-1 表示未指定，用于选择扫描和时域参数。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-113">config/5G/ue.toa.ssb.usrpb210.oai_n78_pci0_arfcn641280.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>rx_antenna</code></td>
+<td><code>TX/RX</code></td>
+<td>接收天线端口名称，须与 UHD 设备支持的端口一致。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3619200000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>45</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>nr_band</code></td>
+<td><code>78</code></td>
+<td>NR 频段编号；-1 表示未指定，用于选择扫描和时域参数。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>gain_sweep_enable</code></td>
+<td><code>0</code></td>
+<td>接收增益扫描开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>target_pci</code></td>
+<td><code>0</code></td>
+<td>目标小区 PCI：-1 自动搜索，指定值为 0～1007。</td>
+</tr>
+<tr>
+<td><code>target_ssb_index</code></td>
+<td><code>0</code></td>
+<td>目标 SSB 索引：-1 自动搜索；指定索引须处于当前候选范围，未扩展原算法能力。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>ssb_freq_offset_hz</code></td>
+<td><code>0</code></td>
+<td>SSB 相对射频中心的频率偏移，单位 Hz；正值表示 SSB 位于更高频率。</td>
+</tr>
+<tr>
+<td><code>pbch_lmax</code></td>
+<td><code>8</code></td>
+<td>PBCH Lmax 假设：0 自动，或 4、8、64；不代表所有场景均已验证。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-114">config/5G/ue.toa.ssb.usrpb210.unicom3550.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>45</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-115">config/5G/ue.toa.ssb.usrpb210.unicom3550.lowrate.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>45</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-116">config/5G/ue.toa.ssb.usrpb210.unicom3550.lowrate60.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>60</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-117">config/5G/ue.toa.ssb.usrpb210.unicom3550.midrate.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>15360000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>60</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-118">config/5G/ue.toa.ssb.usrpb210.unicom3550.oai.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>45</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>1</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-119">config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>60</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>1</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-120">config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.fixed355008.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550080000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>63</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-121">config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.fixed355872.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3558720000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>7680000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>63</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-122">config/5G/ue.toa.ssb.usrpb210.unicom3550.usb3.fixed355872.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3558720000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>54</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>0</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>1</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-123">config/5G/ue.toa.ssb.usrpb210.unicom3550.usb3.sweep.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sdr</code></td>
+<td><code>usrp</code></td>
+<td>射频后端：usrp 为 USRP；lime 为尚未完成的 LimeSDR 接口。</td>
+</tr>
+<tr>
+<td><code>sdr_addrs</code></td>
+<td><code>serial=2512531</code></td>
+<td>UHD 设备选择字符串；多设备时用 serial=序列号指定。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>internal</code></td>
+<td>参考时钟来源：internal 为内部，external 为外部 10 MHz。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>internal</code></td>
+<td>时间基准来源：internal 为内部，external 为外部 PPS。</td>
+</tr>
+<tr>
+<td><code>center_freq_hz</code></td>
+<td><code>3550000000</code></td>
+<td>接收/发射中心频率，单位 Hz；与本次实验频点保持一致。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>30720000</code></td>
+<td>采样率，单位复数样本/秒；设备可能调整为实际支持的值。</td>
+</tr>
+<tr>
+<td><code>rx_gain_db</code></td>
+<td><code>54</code></td>
+<td>接收增益，单位 dB；有效范围由设备决定。</td>
+</tr>
+<tr>
+<td><code>tx_gain_db</code></td>
+<td><code>0</code></td>
+<td>发射增益，单位 dB；仅发射程序使用。</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>SSB_TOA</code></td>
+<td>测量模式：SSB_TOA 为 SSB，PRS_TOA 为预留的 PRS 路径。</td>
+</tr>
+<tr>
+<td><code>full_band_sweep</code></td>
+<td><code>1</code></td>
+<td>全频段扫描开关：0 关闭，1 开启；指定扫描列表时优先使用列表。</td>
+</tr>
+<tr>
+<td><code>strict_center_freq</code></td>
+<td><code>0</code></td>
+<td>严格固定中心频率：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>iq_dump_enable</code></td>
+<td><code>1</code></td>
+<td>候选 IQ 导出开关：0 关闭，1 开启。</td>
+</tr>
+<tr>
+<td><code>ssb_scs_khz</code></td>
+<td><code>30</code></td>
+<td>SSB 子载波间隔，单位 kHz；当前处理支持 15 或 30，0 使用原有自动选择。</td>
+</tr>
+<tr>
+<td><code>anchor_db_path</code></td>
+<td><code>anchors.csv</code></td>
+<td>锚点 CSV 文件路径，相对于当前子配置文件所在目录。</td>
+</tr>
+</tbody></table>
+<h3 id="section-124">config/GNSS/bds_b1c.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>device</code></td>
+<td><code>usrp_b210</code></td>
+<td>支持的接收设备型号。</td>
+</tr>
+<tr>
+<td><code>device_args</code></td>
+<td><code>type=b200</code></td>
+<td>UHD 设备类型与其他参数；序列号使用下面独立的 serial 项。</td>
+</tr>
+<tr>
+<td><code>serial</code></td>
+<td>空</td>
+<td>可选序列号；留空时默认选 UHD 发现列表中的第一台已连接设备。 填写后只选择该序列号，找不到时报错，不回退到其他设备。 两台 B210 同时连接时可用此项固定选择北斗设备。</td>
+</tr>
+<tr>
+<td><code>center_frequency_hz</code></td>
+<td><code>1575420000</code></td>
+<td>B1C RF 载频，Hz；不是参考 IQ 的中频。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>4092000</code></td>
+<td>复数采样率，Hz；算法使用硬件回读的实际值。</td>
+</tr>
+<tr>
+<td><code>master_clock_rate_hz</code></td>
+<td><code>32736000</code></td>
+<td>主时钟，Hz；32.736 MHz / 8 = 4.092 Msps，支持情况待实机验收。</td>
+</tr>
+<tr>
+<td><code>bandwidth_hz</code></td>
+<td><code>4000000</code></td>
+<td>窄带 BOC(1,1) 接收带宽，Hz。</td>
+</tr>
+<tr>
+<td><code>gain_db</code></td>
+<td><code>42</code></td>
+<td>RX 增益，dB；按实际天线和前端调整。</td>
+</tr>
+<tr>
+<td><code>rx_antenna</code></td>
+<td><code>RX2</code></td>
+<td>实际天线接口；此入口只接收，不发射。</td>
+</tr>
+<tr>
+<td><code>clock_source</code></td>
+<td><code>external</code></td>
+<td>已确认接外部 10 MHz / PPS；启动时检查实际状态。</td>
+</tr>
+<tr>
+<td><code>time_source</code></td>
+<td><code>external</code></td>
+<td>见正文和同文件上下文</td>
+</tr>
+<tr>
+<td><code>signal</code></td>
+<td><code>BDS_B1C</code></td>
+<td>信号类型。</td>
+</tr>
+<tr>
+<td><code>if_hz</code></td>
+<td><code>0</code></td>
+<td>残余中频，Hz；0 表示调谐到 B1C 载频，不沿用离线文件的 +20 kHz。</td>
+</tr>
+<tr>
+<td><code>prn_list</code></td>
+<td><code>1-63</code></td>
+<td>PRN 支持逗号和范围；失锁通道独立重捕获。</td>
+</tr>
+<tr>
+<td><code>doppler_min_hz</code></td>
+<td><code>-8000</code></td>
+<td>多普勒下限、上限和粗步长，Hz。</td>
+</tr>
+<tr>
+<td><code>doppler_max_hz</code></td>
+<td><code>8000</code></td>
+<td>见正文和同文件上下文</td>
+</tr>
+<tr>
+<td><code>doppler_step_hz</code></td>
+<td><code>250</code></td>
+<td>见正文和同文件上下文</td>
+</tr>
+<tr>
+<td><code>fine_step_hz</code></td>
+<td><code>25</code></td>
+<td>精细步长，必须整除粗步长，Hz。</td>
+</tr>
+<tr>
+<td><code>acquisition_threshold</code></td>
+<td><code>10</code></td>
+<td>CU-SDR 联合捕获统计量门限，不是 C/N0。</td>
+</tr>
+<tr>
+<td><code>coherent_integration_ms</code></td>
+<td><code>10</code></td>
+<td>连续跟踪和电文要求 10 ms 完整码历元。</td>
+</tr>
+<tr>
+<td><code>dll_bandwidth_hz</code></td>
+<td><code>1</code></td>
+<td>DLL / PLL 带宽，Hz；沿用 MATLAB 已验证环路。</td>
+</tr>
+<tr>
+<td><code>pll_bandwidth_hz</code></td>
+<td><code>18</code></td>
+<td>见正文和同文件上下文</td>
+</tr>
+<tr>
+<td><code>early_late_chips</code></td>
+<td><code>0.06</code></td>
+<td>E/P、P/L 各自偏移，码片。</td>
+</tr>
+<tr>
+<td><code>queue_seconds</code></td>
+<td><code>16</code></td>
+<td>队列时长，秒；4.092 Msps、16 秒约 500 MiB，最多 2 GiB。 满时丢弃旧积压，显式断段并重捕获，不阻塞采样线程。</td>
+</tr>
+<tr>
+<td><code>position_period_ms</code></td>
+<td><code>200</code></td>
+<td>定位周期，ms；只用当时已收齐的电文。</td>
+</tr>
+<tr>
+<td><code>elevation_mask_deg</code></td>
+<td><code>5</code></td>
+<td>仰角门限，度；首次定位后生效。</td>
+</tr>
+<tr>
+<td><code>ui_port</code></td>
+<td><code>8766</code></td>
+<td>北斗网页端口，与 5G 的默认 8765 独立。</td>
+</tr>
+</tbody></table>
+<h3 id="section-125">config/GNSS/offline.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>input_file</code></td>
+<td><code>../通导一体化/CU-SDR-Collection-main/L1_IF20KHz_FS18MHz.bin</code></td>
+<td>IQ 文件路径，不加引号，允许空格；复制到 Linux 后需改为实际文件位置。</td>
+</tr>
+<tr>
+<td><code>input_format</code></td>
+<td><code>ci8</code></td>
+<td>ci8：int8 交织 I,Q；cf32：小端 float32 交织 I,Q。</td>
+</tr>
+<tr>
+<td><code>sample_rate_hz</code></td>
+<td><code>18000000</code></td>
+<td>复数采样率，单位 Hz；应与 IQ 文件真实采样率一致。</td>
+</tr>
+<tr>
+<td><code>if_hz</code></td>
+<td><code>20000</code></td>
+<td>文件的残余中频，单位 Hz；不是 RF 中心频率。</td>
+</tr>
+<tr>
+<td><code>seconds</code></td>
+<td><code>60</code></td>
+<td>每通道请求跟踪时长，10 ms 的整数倍，最大 3600 s；需要足够 IQ。</td>
+</tr>
+<tr>
+<td><code>prns</code></td>
+<td><code>1-63</code></td>
+<td>捕获搜索 PRN，支持逗号和区间；随后跟踪全部已捕获通道。</td>
+</tr>
+<tr>
+<td><code>ui_port</code></td>
+<td><code>8766</code></td>
+<td>北斗独立 UI 端口，避免与 5G 默认 8765 冲突；修改后重新启动脚本。</td>
+</tr>
+</tbody></table>
+<h3 id="section-126">config/UI/monitor.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enabled</code></td>
+<td><code>1</code></td>
+<td>是否开启接收程序的监看记录；0 为关闭，1 为开启。</td>
+</tr>
+<tr>
+<td><code>port</code></td>
+<td><code>8765</code></td>
+<td>本机浏览器服务端口，范围 1024～65535；服务仅绑定 127.0.0.1。</td>
+</tr>
+<tr>
+<td><code>poll_interval_ms</code></td>
+<td><code>200</code></td>
+<td>浏览器状态与结果轮询周期，单位毫秒，范围 100～5000。</td>
+</tr>
+<tr>
+<td><code>status_interval_ms</code></td>
+<td><code>200</code></td>
+<td>接收程序状态记录最小间隔，单位毫秒，范围 100～60000。</td>
+</tr>
+<tr>
+<td><code>trace_interval_ms</code></td>
+<td><code>1000</code></td>
+<td>各扫描目标阶段波形快照最小间隔，单位毫秒，范围 500～60000。</td>
+</tr>
+<tr>
+<td><code>record_dir</code></td>
+<td><code>monitor</code></td>
+<td>监看文件目录，相对于仓库 log/；禁止父目录跳转。</td>
+</tr>
+<tr>
+<td><code>gnss_record_dir</code></td>
+<td><code>gnss-ui</code></td>
+<td>北斗离线 UI 实验目录，相对于仓库 log/；由 ui/import_gnss.py 导入。</td>
+</tr>
+<tr>
+<td><code>segment_mb</code></td>
+<td><code>128</code></td>
+<td>每段记录的大小上限，单位 MiB，范围 1～512；达到后轮换。</td>
+</tr>
+<tr>
+<td><code>max_segments</code></td>
+<td><code>8</code></td>
+<td>单次实验保留的记录段数，范围 2～64；覆盖本次最旧段，不删除其他实验。</td>
+</tr>
+<tr>
+<td><code>max_history</code></td>
+<td><code>5000</code></td>
+<td>服务内存中保留的测量事件数量，范围 100～50000；旧事件仍可从文件回看。</td>
+</tr>
+<tr>
+<td><code>stale_after_ms</code></td>
+<td><code>5000</code></td>
+<td>超过多久未更新即标记数据过期，单位毫秒，范围 1000～120000。</td>
+</tr>
+<tr>
+<td><code>source_mode</code></td>
+<td><code>controlled</code></td>
+<td>信号来源：controlled 为自建可控锚点，commercial 为运营商现网；仅描述场景。</td>
+</tr>
+<tr>
+<td><code>time_model</code></td>
+<td><code>shared</code></td>
+<td>时间模型：shared 为收发共同时间基准，receiver_bias 为仅基站同步。</td>
+</tr>
+<tr>
+<td><code>absolute_toa_calibrated</code></td>
+<td><code>0</code></td>
+<td>是否已经独立确认发射时间与硬件延迟标定，0 未确认，1 已确认；不自动配置设备时钟。</td>
+</tr>
+</tbody></table>
+<h3 id="section-127">config/config.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enable_5g</code></td>
+<td><code>1</code></td>
+<td>是否启用 5G：1 启用，0 关闭；关闭时 5G 程序会拒绝启动。</td>
+</tr>
+<tr>
+<td><code>ui_config</code></td>
+<td><code>UI/monitor.f</code></td>
+<td>浏览器监看子配置，相对于本文件；不改变接收算法参数。</td>
+</tr>
+<tr>
+<td><code>nr_config</code></td>
+<td><code>5G/ue.toa.ssb.usrpb210.f</code></td>
+<td>5G 接收子配置，相对于本文件所在目录；保留迁移前默认配置的参数。</td>
+</tr>
+<tr>
+<td><code>nr_anchor_config</code></td>
+<td><code>5G/anchor0.ssb.usrpb210.f</code></td>
+<td>5G 锚点发射子配置，相对于本文件所在目录；仅锚点程序读取此项。</td>
+</tr>
+<tr>
+<td><code>enable_gnss</code></td>
+<td><code>0</code></td>
+<td>统一模块调度预留标记；当前 5G 程序不会启动北斗。 显式执行 run_BDS_only.sh 时由独立脚本启动，不读取此标记。</td>
+</tr>
+<tr>
+<td><code>gnss_config</code></td>
+<td><code>GNSS/bds_b1c.f</code></td>
+<td>北斗实采配置；run_BDS_only.sh 默认读取它，--offline 另读 GNSS/offline.f。</td>
+</tr>
+<tr>
+<td><code>enable_fusion</code></td>
+<td><code>0</code></td>
+<td>融合启用标记：0 暂不运行，1 为后续计划启用；当前 5G 程序不会启动融合。</td>
+</tr>
+<tr>
+<td><code>fusion_config</code></td>
+<td><code>fusion/wls.f</code></td>
+<td>融合子配置路径，相对于本文件所在目录；当前预留，尚未接入在线加载。</td>
+</tr>
+</tbody></table>
+<h3 id="section-128">config/fusion/wls.f</h3>
+<table class="parameters">
+<colgroup><col style="width:28%"><col style="width:22%"><col style="width:50%"></colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>显式值</th>
+<th>原配置说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>coordinate_frame</code></td>
+<td><code>ECEF</code></td>
+<td>坐标系；ECEF 为地心地固坐标，单位米；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>time_scale</code></td>
+<td><code>UTC_NS</code></td>
+<td>时间标记约定；UTC_NS 表示 UTC 纳秒；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>solver</code></td>
+<td><code>WLS</code></td>
+<td>融合解算方法；当前为 WLS，配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>max_iterations</code></td>
+<td><code>15</code></td>
+<td>最大迭代次数；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>position_tolerance_m</code></td>
+<td><code>0.001</code></td>
+<td>位置收敛阈值，单位米；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>huber_threshold_sigma</code></td>
+<td><code>3.0</code></td>
+<td>Huber 降权阈值，单位为观测标准差倍数；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>bds_measurement_sigma_m</code></td>
+<td><code>2.0</code></td>
+<td>北斗观测标准差，单位米；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>nr_measurement_sigma_m</code></td>
+<td><code>1.5</code></td>
+<td>NR 观测标准差，单位米；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>estimate_independent_clock_biases</code></td>
+<td><code>true</code></td>
+<td>是否分别估计北斗和 NR 钟差：true/false；融合配置暂未接入加载。</td>
+</tr>
+<tr>
+<td><code>require_external_10mhz</code></td>
+<td><code>true</code></td>
+<td>是否要求外部 10 MHz：true/false；仅保留配置，当前不强制检查。</td>
+</tr>
+<tr>
+<td><code>require_external_pps</code></td>
+<td><code>true</code></td>
+<td>是否要求外部 PPS：true/false；仅保留配置，当前不强制检查。</td>
+</tr>
+</tbody></table>
+<h3 id="section-129">config/5G/anchors.csv</h3>
+<pre><code class="language-csv">anchor_id,pci,ssb_index,x_m,y_m,z_m,absolute_time_valid,hw_cal_delay_ns
+0,42,0,0.0,0.0,3.0,1,0.0
+1,43,0,20.0,0.0,3.0,1,0.0
+</code></pre>
+<p>锚点位置、身份、absolute_time_valid和零延迟均应以真实测量及链路验收为准，不能仅凭示例表确认。</p>
+<h2 id="section-130">附录B MATLAB基线与逐层对照复现</h2>
+<p>这些命令复用仓库现有工具，可能耗时较长。本次文档整理未执行这些数值任务。referenceRoot必须指向实际CU-SDR参考目录，IQ参数必须保持与基线一致。参考源不应被修改，输出在工程build目录。</p>
+<h3 id="section-131">B1 在MATLAB中生成参考</h3>
+<pre><code class="language-matlab">addpath(&#39;src/GNSS/tools&#39;);
+referenceRoot = &#39;D:/My control center/3-实验室/通导一体化/CU-SDR-Collection-main&#39;;
+iqPath = fullfile(referenceRoot,&#39;L1_IF20KHz_FS18MHz.bin&#39;);
+make_b1c_baseline(referenceRoot,iqPath,&#39;build/gnss-baseline/matlab&#39;);
+make_b1c_tracking_baseline(referenceRoot,iqPath, ...
+  &#39;build/gnss-baseline/matlab&#39;,&#39;build/gnss-tracking/matlab&#39;,60);
+make_b1c_navigation_baseline(referenceRoot, ...
+  &#39;build/gnss-tracking/matlab/tracking.mat&#39;,&#39;build/gnss-navigation/matlab&#39;);
+make_b1c_position_baseline(referenceRoot, ...
+  &#39;build/gnss-tracking/matlab/tracking.mat&#39;,&#39;build/gnss-position/matlab&#39;);
+</code></pre>
+<p>预期依次生成捕获CSV/码向量/manifest/baseline.mat，跟踪CSV/MAT/manifest，逐帧frames.json和manifest，以及定位solutions/observations/satellite_vectors/navigation.mat和日志。下一步核对输入哈希，再运行C比较。电文参考需要其MATLAB CRC等工具箱；缺依赖应明确失败，不能跳过校验。</p>
+<h3 id="section-132">B2 在Linux中比较捕获与跟踪</h3>
+<pre><code class="language-bash">IQ=&#39;/data/bds/L1_IF20KHz_FS18MHz.bin&#39;
+python3 src/GNSS/tools/compare_b1c_baseline.py \
+  --baseline build/gnss-baseline/matlab \
+  --receiver build/gnss-offline/src/GNSS/bds-b1c-receiver \
+  --code-test build/gnss-offline/src/GNSS/test_b1c_code \
+  --iq &quot;$IQ&quot; --reference-root /data/CU-SDR-Collection-main \
+  --output build/gnss-baseline/comparison
+
+python3 src/GNSS/tools/compare_b1c_tracking.py --run \
+  --reference build/gnss-tracking/matlab \
+  --actual build/gnss-tracking/final_reference \
+  --iq &quot;$IQ&quot; --tracker build/gnss-offline/src/GNSS/bds-b1c-track \
+  --acquisition-csv build/gnss-baseline/comparison/c_acquisition.csv \
+  --output build/gnss-tracking/comparison.json
+</code></pre>
+<p>预期生成输入/二进制哈希、C捕获结果和逐历元跟踪差异报告。捕获要求判决一致、成功PRN频率和相位差0、统计量相对差不超过1e-7。跟踪一对一比较采用禁用重捕获的参考路径；自动重捕获模式另做连续性和质量验收，不能要求两者在重捕获后仍逐样本相同。</p>
+<h3 id="section-133">B3 比较电文与定位</h3>
+<p>先对final_reference运行正文的导航、定位CLI，分别输出build/gnss-navigation/verified_reference和build/gnss-position/verified_reference，再比较：</p>
+<pre><code class="language-bash">python3 src/GNSS/tools/compare_b1c_navigation.py \
+  --reference build/gnss-navigation/matlab \
+  --actual build/gnss-navigation/verified_reference \
+  --tracking build/gnss-tracking/final_reference \
+  --output build/gnss-navigation/comparison_reference.json
+
+python3 src/GNSS/tools/compare_b1c_position.py \
+  --reference build/gnss-position/matlab \
+  --actual build/gnss-position/verified_reference \
+  --tracking build/gnss-tracking/final_reference \
+  --decoder build/gnss-offline/src/GNSS/bds-b1c-position \
+  --output build/gnss-position/comparison_reference.json
+</code></pre>
+<p>预期生成逐帧比特/星历/采样点对照，以及逐历元位置、钟差、伪距、卫星状态、DOP和输入输出哈希。下一步区分有意修正和数值误差，再进行真实天线精度实验。自动重捕获结果应使用对应CSV重新生成的MATLAB参考，不能混用未重捕获参考的卫星集合。</p>
+<h2 id="section-134">附录C 核心源码定位与文件身份</h2>
+<p>下表为文档整理时的文件SHA256前16位，用于快速识别后续文件是否变化，不作为完整安全校验。完整哈希及本文依据列表保存在文档配套JSON。函数定位为当前文件的一基行号，源码更改后需更新。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>定位</th>
+<th>SHA256前16位</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>README.md</code></td>
+<td>第1行起</td>
+<td><code>820399b2f77eac26</code></td>
+</tr>
+<tr>
+<td><code>CMakeLists.txt</code></td>
+<td>第1行起</td>
+<td><code>cd1289b2a4bbb8f9</code></td>
+</tr>
+<tr>
+<td><code>CMakePresets.json</code></td>
+<td>第1行起</td>
+<td><code>86b12a2e670ce7bc</code></td>
+</tr>
+<tr>
+<td><code>.github/workflows/build.yml</code></td>
+<td>第1行起</td>
+<td><code>f8d1b0b562030fb0</code></td>
+</tr>
+<tr>
+<td><code>src/5G/app/nr-toa-uesoftmodem.c</code></td>
+<td>第47行起</td>
+<td><code>8fded27829d949e5</code></td>
+</tr>
+<tr>
+<td><code>src/5G/app/nr-ssb-anchor.c</code></td>
+<td>第24行起</td>
+<td><code>d53ffc72601007a8</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_config_router.c</code></td>
+<td>第17行起</td>
+<td><code>be3bb0b69e385d99</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_toa_cfg_loader.c</code></td>
+<td>第10行起</td>
+<td><code>82bab50649b357f3</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_iq_ring.c</code></td>
+<td>第8行起</td>
+<td><code>b2a3116ff3afc976</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_epoch_mgr.c</code></td>
+<td>第5行起</td>
+<td><code>59e3cd4fc9b0b15b</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_meas_assoc.c</code></td>
+<td>第3行起</td>
+<td><code>73cee4bf6c72a443</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_pos_solver.c</code></td>
+<td>第5行起</td>
+<td><code>379cb0aef8f80df8</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_anchor_write.c</code></td>
+<td>第9行起</td>
+<td><code>29aa81c2c72ae242</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_ssb_tx_scheduler.c</code></td>
+<td>第5行起</td>
+<td><code>498e270ceec5847b</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_ssb_beacon_gen.c</code></td>
+<td>第6行起</td>
+<td><code>89cf615b20f8939b</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/common/nr_clock_mgr.c</code></td>
+<td>第8行起</td>
+<td><code>62619a84c38166eb</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/ssb/nr_ssb_provider.c</code></td>
+<td>第23行起</td>
+<td><code>ac343603f47847d9</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/ssb/nr_ssb_sync.c</code></td>
+<td>第24行起</td>
+<td><code>9df61b1168c710ba</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/ssb/nr_ssb_chest.c</code></td>
+<td>第15行起</td>
+<td><code>b0c58b4b909a8a75</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/ssb/nr_ssb_toa_est.c</code></td>
+<td>第13行起</td>
+<td><code>be61bf21a324717f</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/ssb/nr_pbch.c</code></td>
+<td>第56行起</td>
+<td><code>d2af2383a4f035a3</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/prs/nr_prs_provider.c</code></td>
+<td>第4行起</td>
+<td><code>c913edcfc809a830</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/prs/nr_prs_extract.c</code></td>
+<td>第5行起</td>
+<td><code>b98cbbb299c61789</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/prs/nr_prs_chest.c</code></td>
+<td>第3行起</td>
+<td><code>1e0dc5fe5ab5ef88</code></td>
+</tr>
+<tr>
+<td><code>src/5G/positioning/prs/nr_prs_toa_est.c</code></td>
+<td>第3行起</td>
+<td><code>edc7d7f08bab2108</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/bds_b1c/b1c_code.c</code></td>
+<td>第207行起</td>
+<td><code>dc04fcb41adf2aca</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/bds_b1c/b1c_acquisition.c</code></td>
+<td>第17行起</td>
+<td><code>644b79514f267992</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/bds_b1c/b1c_tracking.c</code></td>
+<td>第40行起</td>
+<td><code>e0198d469083f026</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/bds_b1c/b1c_navigation.c</code></td>
+<td>第23行起</td>
+<td><code>d7b34d944bac4399</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/bds_b1c/b1c_position.c</code></td>
+<td>第15行起</td>
+<td><code>0e8110cdf720799c</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/live/live_engine.cpp</code></td>
+<td>第8行起</td>
+<td><code>9a68f914c4111c36</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/live/uhd_b210.c</code></td>
+<td>第19行起</td>
+<td><code>edf5a36e7cf7b066</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/live/bds_b1c_live.cpp</code></td>
+<td>第13行起</td>
+<td><code>2cc95da3b383a06d</code></td>
+</tr>
+<tr>
+<td><code>src/fusion/solver/fusion_wls.c</code></td>
+<td>第8行起</td>
+<td><code>3ba064d259a2bf90</code></td>
+</tr>
+<tr>
+<td><code>src/fusion/adapters/nr5g_adapter.c</code></td>
+<td>第6行起</td>
+<td><code>f153e520bf8fbcc6</code></td>
+</tr>
+<tr>
+<td><code>src/fusion/common/observation_io.c</code></td>
+<td>第7行起</td>
+<td><code>281596aaab1a928a</code></td>
+</tr>
+<tr>
+<td><code>src/fusion/app/bds5g_positioning.c</code></td>
+<td>第8行起</td>
+<td><code>4bd3a1d15b0cb7dd</code></td>
+</tr>
+<tr>
+<td><code>ui/server.py</code></td>
+<td>第1行起</td>
+<td><code>ce6810280f0e213d</code></td>
+</tr>
+<tr>
+<td><code>ui/gnss.py</code></td>
+<td>第1行起</td>
+<td><code>eef5506817e1a9ea</code></td>
+</tr>
+<tr>
+<td><code>ui/gnss_live.py</code></td>
+<td>第1行起</td>
+<td><code>07dccd4b83f6f39f</code></td>
+</tr>
+<tr>
+<td><code>ui/import_gnss.py</code></td>
+<td>第1行起</td>
+<td><code>24dfc26aa0d94f63</code></td>
+</tr>
+<tr>
+<td><code>ui/launch_bds.py</code></td>
+<td>第1行起</td>
+<td><code>94888e5d48d5b062</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/live_receiver.md</code></td>
+<td>第1行起</td>
+<td><code>365657ef8fcdbf17</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/navigation.md</code></td>
+<td>第1行起</td>
+<td><code>f4865af673f938ca</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/offline_acquisition.md</code></td>
+<td>第1行起</td>
+<td><code>9a36ed66393151c7</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/positioning.md</code></td>
+<td>第1行起</td>
+<td><code>b1202c0a4a91e8da</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/tracking.md</code></td>
+<td>第112行起</td>
+<td><code>40b1420ddec2e28e</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/validation_2026-10-20.md</code></td>
+<td>第1行起</td>
+<td><code>407ec4b9922bff29</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/validation_navigation_2026-10-21.md</code></td>
+<td>第1行起</td>
+<td><code>a881fe092ed3a787</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/validation_position_2026-10-21.md</code></td>
+<td>第1行起</td>
+<td><code>f74b4667b35f6984</code></td>
+</tr>
+<tr>
+<td><code>src/GNSS/docs/validation_tracking_2026-10-21.md</code></td>
+<td>第1行起</td>
+<td><code>e084ba4cf83df0e4</code></td>
+</tr>
+<tr>
+<td><code>src/5G/docs/README.md</code></td>
+<td>第1行起</td>
+<td><code>ec7e7b06f5ffbf48</code></td>
+</tr>
+<tr>
+<td><code>src/fusion/docs/architecture.md</code></td>
+<td>第1行起</td>
+<td><code>f27fd9e3b0b1794d</code></td>
+</tr>
+<tr>
+<td><code>src/fusion/docs/data_formats.md</code></td>
+<td>第1行起</td>
+<td><code>0f24bd97e6630872</code></td>
+</tr>
+<tr>
+<td><code>ui/README.md</code></td>
+<td>第1行起</td>
+<td><code>61f1db964f701b3c</code></td>
+</tr>
+<tr>
+<td><code>ui/gnss.md</code></td>
+<td>第1行起</td>
+<td><code>b5b15632e3c06633</code></td>
+</tr>
+<tr>
+<td><code>ui/protocol.md</code></td>
+<td>第1行起</td>
+<td><code>9525792c5cfe9d04</code></td>
+</tr>
+<tr>
+<td><code>ui/validation_gnss_2026-10-22.md</code></td>
+<td>第1行起</td>
+<td><code>b65a2676524a91ef</code></td>
+</tr>
+<tr>
+<td><code>config/5G/anchor0.ssb.usrpb210.f</code></td>
+<td>第1行起</td>
+<td><code>6cd9093b73dd9718</code></td>
+</tr>
+<tr>
+<td><code>config/5G/anchor1.ssb.usrpb210.f</code></td>
+<td>第1行起</td>
+<td><code>c12cc2cdcc01ce58</code></td>
+</tr>
+<tr>
+<td><code>config/5G/nr_n78_reference.f</code></td>
+<td>第1行起</td>
+<td><code>4f115cac0714bc20</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.prs.usrpb210.f</code></td>
+<td>第1行起</td>
+<td><code>1a2ec82f364d86d7</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.limesdr.f</code></td>
+<td>第1行起</td>
+<td><code>1d41dc1a5136b8d4</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.ctc3509.fixed.f</code></td>
+<td>第1行起</td>
+<td><code>080a6978990a33ed</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.ctc3509.lowrate.f</code></td>
+<td>第1行起</td>
+<td><code>91eb347cfa16705e</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.f</code></td>
+<td>第1行起</td>
+<td><code>7a26fbef6822ef81</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.local3600.txrx.f</code></td>
+<td>第1行起</td>
+<td><code>bea68a73178db382</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.lowrate.f</code></td>
+<td>第1行起</td>
+<td><code>565ecb4716136fd5</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.multi-target.f</code></td>
+<td>第1行起</td>
+<td><code>463e4d1f60e48822</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.n1_2114.fixed.f</code></td>
+<td>第1行起</td>
+<td><code>a2109bb0e58c6160</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.n1_422910_pci84.precise.f</code></td>
+<td>第1行起</td>
+<td><code>6b445099d2df1d8c</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.n1_422910_pci84.ultrarate.f</code></td>
+<td>第1行起</td>
+<td><code>98a2d37df3e32837</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.oai_default_b210.f</code></td>
+<td>第1行起</td>
+<td><code>41d367543828a5cb</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.oai_n78_pci0_arfcn641280.f</code></td>
+<td>第1行起</td>
+<td><code>cf58866b9695765a</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.f</code></td>
+<td>第1行起</td>
+<td><code>a2fd58ea70518891</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.lowrate.f</code></td>
+<td>第1行起</td>
+<td><code>cf35efb8c1b161c8</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.lowrate60.f</code></td>
+<td>第1行起</td>
+<td><code>ef737b25704c4d70</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.midrate.f</code></td>
+<td>第1行起</td>
+<td><code>a0eab4e95b1a3109</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.oai.f</code></td>
+<td>第1行起</td>
+<td><code>ec4c9370046ff959</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.f</code></td>
+<td>第1行起</td>
+<td><code>07236f541bdcffe2</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.fixed355008.f</code></td>
+<td>第1行起</td>
+<td><code>2262f7ca8187f79e</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.usb2.fixed355872.f</code></td>
+<td>第1行起</td>
+<td><code>c9b568d2b0355565</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.usb3.fixed355872.f</code></td>
+<td>第1行起</td>
+<td><code>fb3dc4e1bfa1f0a6</code></td>
+</tr>
+<tr>
+<td><code>config/5G/ue.toa.ssb.usrpb210.unicom3550.usb3.sweep.f</code></td>
+<td>第1行起</td>
+<td><code>cc8e376475219fc7</code></td>
+</tr>
+<tr>
+<td><code>config/GNSS/bds_b1c.f</code></td>
+<td>第1行起</td>
+<td><code>3ca7538151063b2e</code></td>
+</tr>
+<tr>
+<td><code>config/GNSS/offline.f</code></td>
+<td>第1行起</td>
+<td><code>710a8a44350e5401</code></td>
+</tr>
+<tr>
+<td><code>config/UI/monitor.f</code></td>
+<td>第1行起</td>
+<td><code>70088040a6daaa84</code></td>
+</tr>
+<tr>
+<td><code>config/config.f</code></td>
+<td>第1行起</td>
+<td><code>3e450074f8c18c69</code></td>
+</tr>
+<tr>
+<td><code>config/fusion/wls.f</code></td>
+<td>第1行起</td>
+<td><code>4879d0ea4ace22f6</code></td>
+</tr>
+<tr>
+<td><code>config/5G/anchors.csv</code></td>
+<td>第1行起</td>
+<td><code>2b818ba6fe51e2bb</code></td>
+</tr>
+</tbody></table>
+<p>维护本说明时，优先更新正文能力状态、当前主配置、默认值、源码边界和验收日期，再重新生成配置附录与HTML，避免只更新参数表而留下过时结论。</p>
+</main><a class="toplink" href="#section-1">返回顶部</a></body></html>

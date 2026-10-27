@@ -116,7 +116,7 @@ function render(force=false) {
   if(force||performance.now()-state.lastTracePaint>500){
     state.lastTracePaint=performance.now();const trace=d.trace&&keyOf(d.trace)===state.selected?d.trace:null,curves=trace?.curves||{};
     $("trace-caption").textContent=trace?`事件 ${trace.event_id} · ${stamp(trace.time_ms)} · 硬件采样计数 ${trace.hardware_sample}${stale(trace,d)?" · 快照已过期":""}`:"当前条目还没有阶段快照。未完成的阶段不会补造数据。";
-    $("trace-facts").innerHTML=[["搜索步长",trace?.pss_step_samp?trace.pss_step_samp+" samples":"本事件未执行全局 PSS 搜索"],["粗定时",trace?.coarse_offset_samp],["跟踪累计移位",trace?.tracking_shift_samp],["CFO / Hz",num(trace?.cfo_hz)],["CIR 峰值索引",trace?.cir_peak_sample],["小数采样点",num(trace?.fractional_offset_samp,4)],["PBCH 失败阶段",trace?.fail_stage]].map(([k,v])=>`<span>${k}<b>${esc(v)}</b></span>`).join("");
+    $("trace-facts").innerHTML=[["搜索步长",trace?.pss_step_samp?trace.pss_step_samp+" samples":"本事件未执行全局 PSS 搜索"],["粗定时",trace?.coarse_offset_samp],["跟踪累计移位",trace?.tracking_shift_samp],["CFO / Hz",num(trace?.cfo_hz)],["CIR 峰值索引",trace?.cir_peak_sample],["CIR 小数格点",num(trace?.fractional_offset_samp,4)],["CIR 格点间隔 / ns",num(trace?.cir_bin_width_ns,4)],["PBCH 失败阶段",trace?.fail_stage]].map(([k,v])=>`<span>${k}<b>${esc(v)}</b></span>`).join("");
     plots.iq.set([curves.iq_i,curves.iq_q]);plots.pss.set([curves.pss_0,curves.pss_1,curves.pss_2]);plots.channel.set([curves.channel_magnitude]);plots.phase.set([curves.channel_phase]);plots.cir.set([curves.cir_magnitude]);plots.fraction.set([curves.fractional_peak]);
     const t0=series[0]?.time_ms||0;
     for(const [plot,field]of [[plots.cfo,"cfo_hz"],[plots.delay,"relative_delay_ns"]])plot.set([{x:series.map(e=>(e.time_ms-t0)/1000),y:series.map(e=>e[field])}],"当前窗口尚无有效测量记录");

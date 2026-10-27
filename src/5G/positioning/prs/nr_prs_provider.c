@@ -41,8 +41,7 @@ static int prs_extract_meas(void *ctx, const nr_iq_block_t *blk,
   if (!blk || !sync || !meas) {
     return -1;
   }
-  (void)nr_toa_build_meas(sync, blk, 0, 0.0, meas);
-  return 0;
+  return nr_toa_build_meas(sync, blk, 0.0, meas);
 }
 
 static int prs_dump_trace(void *ctx)

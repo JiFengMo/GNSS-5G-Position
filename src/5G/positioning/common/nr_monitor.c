@@ -21,7 +21,7 @@ typedef struct {
   uint64_t job, ts, abs_sample;
   uint32_t nsamps, pss_step;
   int cir_peak;
-  double fraction;
+  double fraction, cir_bin_width_s;
   nr_sync_state_t sync;
   nr_toa_meas_t meas;
   curve_t curves[CURVES];
@@ -112,6 +112,9 @@ static void write_event(FILE *fp, const event_t *e, unsigned long seq)
   if (e->curves[7].n) fprintf(fp, "%d", e->cir_peak); else fputs("null", fp);
   fputs(",\"fractional_offset_samp\":", fp);
   if (e->curves[7].n) number(fp, e->fraction); else fputs("null", fp);
+  fputs(",\"cir_bin_width_ns\":", fp);
+  if (e->curves[7].n && e->cir_bin_width_s > 0.0) number(fp, e->cir_bin_width_s * 1e9);
+  else fputs("null", fp);
   fputs(",\"relative_delay_ns\":", fp);
   if (e->has_meas && e->meas.fs_hz > 0 && locked)
     number(fp, ((double)((int64_t)e->meas.rx_ts_int - (int64_t)e->ts) + e->meas.rx_ts_frac) * 1e9 / e->meas.fs_hz);
@@ -291,11 +294,18 @@ void nr_monitor_cir(const nr_cir_t *cir, int peak, double fraction)
     c->x[i] = (float)pos; c->y[i] = best;
   }
   c->n = bins; c->original = cir->cir_len;
-  if (peak > 0 && (unsigned)(peak+1) < cir->cir_len) {
-    for (int i = -1; i <= 1; ++i) { cf32_t v = cir->cir[peak+i]; fit->x[i+1] = (float)(peak+i); fit->y[i+1] = hypotf(v.r,v.i); }
+  if (peak >= 0 && (unsigned)peak < cir->cir_len && cir->cir_len >= 3U) {
+    for (int i = -1; i <= 1; ++i) {
+      int64_t j = (int64_t)peak + i;
+      if (j < 0) j += cir->cir_len;
+      if (j >= cir->cir_len) j -= cir->cir_len;
+      const cf32_t v = cir->cir[j];
+      fit->x[i+1] = (float)(peak+i); fit->y[i+1] = hypotf(v.r,v.i);
+    }
     fit->n = fit->original = 3;
   }
   capture.event.cir_peak = peak; capture.event.fraction = fraction;
+  capture.event.cir_bin_width_s = cir->bin_width_s;
 }
 void nr_monitor_meas(const nr_toa_meas_t *m)
 {

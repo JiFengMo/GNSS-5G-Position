@@ -344,7 +344,7 @@ typedef struct {
   uint16_t pci_full;
   uint8_t ssb_index;
   int32_t coarse_offset_samp;
-  float frac_offset_samp;
+  float frac_offset_samp; /* Diagnostic fractional window optimum, not an extra TOA correction. */
   float cfo_hz;
   uint32_t sfn;
   uint16_t slot;
@@ -418,6 +418,7 @@ typedef struct {
   cf32_t *cir;
   uint32_t cir_len;
   uint8_t os_factor;
+  double bin_width_s; /* CIR delay grid spacing; not generally 1 / RX sample rate. */
   float peak_metric;
 } nr_cir_t;
 

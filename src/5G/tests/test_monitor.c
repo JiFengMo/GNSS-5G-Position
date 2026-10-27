@@ -27,7 +27,7 @@ int main(void)
   nr_monitor_begin(&block, 1); CHECK(nr_monitor_capturing());
   for (unsigned i=0;i<64;i+=4) nr_monitor_pss(i,0,(double)i,64,4);
   cf32_t bins[1024]; memset(bins,0,sizeof(bins)); bins[513].r=20;
-  nr_cir_t cir; memset(&cir,0,sizeof(cir)); cir.cir=bins; cir.cir_len=1024;
+  nr_cir_t cir; memset(&cir,0,sizeof(cir)); cir.cir=bins; cir.cir_len=1024; cir.bin_width_s=1.0/30720000;
   nr_monitor_cir(&cir,513,.125); nr_monitor_end(&block,&sync,&clock);
   /* A retune must not bypass the trace interval. */
   block.rx_freq_hz+=10000000; nr_monitor_begin(&block,2); CHECK(!nr_monitor_capturing());
@@ -43,6 +43,7 @@ int main(void)
       CHECK(strstr(text,"\"clock_locked\":true"));
       CHECK(strstr(text,"\"cir_peak_sample\":513"));
       CHECK(strstr(text,"\"fractional_offset_samp\":0.125"));
+      CHECK(strstr(text,"\"cir_bin_width_ns\":32.5520833"));
       CHECK(strstr(text,"\"cir_magnitude\"")); CHECK(strstr(text,"serial=example\\\"\\\\test")); ++found;
       printf("recording=%s\n",path);
     }

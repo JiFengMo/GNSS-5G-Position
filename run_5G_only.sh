@@ -1,20 +1,25 @@
 #!/bin/sh
-# Linux 一键启动：sh run_5G_only.sh；仅查看历史记录：sh run_5G_only.sh --ui-only。
-# 输出：build/radio/、log/launcher/<时间>-<进程号>/ 和配置指定的监看记录。
+# Linux 一键启动；--ui-only 查看记录，--capture-iq 独立采集原始 IQ。
+# 输出：普通模式 build/radio/ 与 log/launcher/；原始采集 log/iq-capture/。
 set -eu
 
 case "${1:-}" in
     '') mode=radio ;;
     --ui-only) mode=ui ;;
+    --capture-iq) mode=capture ;;
     -h|--help)
-        echo '用法：sh run_5G_only.sh [--ui-only]'
+        echo '用法：sh run_5G_only.sh [--ui-only | --capture-iq [--config 文件] [--check]]'
         echo '默认：增量编译、检查配置、启动接收机和浏览器服务。'
         echo '--ui-only：只启动浏览器服务，不编译、不打开接收设备。'
-        echo '参数均在 config/config.f 及其选择的子配置中修改。'
+        echo '--capture-iq：仅采集 B210 原始 IQ，不解调、不启动 UI、不要求编译接收机。'
+        echo '  默认独立配置：config/5G/iq_capture.f；--config 可指定另一份采集配置。'
+        echo '  --check 只检查采集配置和磁盘空间，不打开设备。'
+        echo '  输出：log/iq-capture/<实验目录>/capture.c16、元数据与逐块时间戳。'
+        echo '普通模式参数在 config/config.f 及其选择的子配置中修改。'
         exit 0 ;;
     *) echo "未知参数：$1；使用 sh run_5G_only.sh --help 查看帮助。" >&2; exit 2 ;;
 esac
-if [ "$#" -gt 1 ]; then
+if [ "$mode" != capture ] && [ "$#" -gt 1 ]; then
     echo '参数过多；使用 sh run_5G_only.sh --help 查看帮助。' >&2
     exit 2
 fi
@@ -23,6 +28,11 @@ fi
 cd -- "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 command -v python3 >/dev/null 2>&1 || { echo '缺少 Python 3.9+。' >&2; exit 1; }
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else "需要 Python 3.9+")'
+if [ "$mode" = capture ]; then
+    shift
+    # RX-only UHD C API path; independent of normal main/UI configuration.
+    exec python3 -u ui/capture_iq.py "$@"
+fi
 python3 -c 'from pathlib import Path; from ui.server import load_settings; s = load_settings(Path("config/config.f")); print("配置检查通过；浏览器地址：http://127.0.0.1:" + str(s["port"]))'
 
 if [ "$mode" = radio ]; then

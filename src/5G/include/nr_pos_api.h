@@ -214,8 +214,10 @@ int nr_ssb_pbch_prepare_frontend(const nr_ssb_grid_t *grid,
 /* ssb_toa_est */
 int nr_toa_find_integer_peak(const nr_cir_t *cir, int *peak_idx);
 int nr_toa_refine_fractional(const nr_cir_t *cir, int peak_idx, double *frac);
+int nr_toa_cir_delay_samples(const nr_cir_t *cir, int peak_idx, double frac,
+                             double fs_hz, double *delay_samp);
 int nr_toa_build_meas(const nr_sync_state_t *sync, const nr_iq_block_t *blk,
-                      int peak_idx, double frac, nr_toa_meas_t *meas);
+                      double residual_delay_samp, nr_toa_meas_t *meas);
 
 /* meas_assoc */
 int nr_meas_assoc_anchor(const nr_toa_meas_t *meas, const nr_anchor_desc_t *db,
